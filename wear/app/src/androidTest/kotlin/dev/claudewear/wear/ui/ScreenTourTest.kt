@@ -55,16 +55,13 @@ class ScreenTourTest(
     }
 
     /**
-     * The app's own external files directory: nothing to ask permission for, and `adb pull`
-     * can reach it even though another app could not.
+     * The app's own internal files directory, which `scripts/e2e.sh` reads back with
+     * `run-as`. Not external storage: Android 11 closed `/sdcard/Android/data/<pkg>` to the
+     * shell user, so `adb pull` comes back empty from there — silently, which is worse.
      */
     private fun shotDirectory(): File {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val directory = requireNotNull(context.getExternalFilesDir(SHOTS)) {
-            "external storage is unavailable, so there is nowhere to leave the screenshots"
-        }
-        directory.mkdirs()
-        return directory
+        return File(context.filesDir, SHOTS).apply { mkdirs() }
     }
 
     companion object {

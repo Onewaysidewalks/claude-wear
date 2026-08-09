@@ -25,7 +25,11 @@ WORK_DIR="$REPO_ROOT/.e2e"
 BRIDGE_LOG="$WORK_DIR/bridge.log"
 BRIDGE_STATE="$WORK_DIR/state"
 SHOT_DIR="$WORK_DIR/shots"
-DEVICE_SHOT_DIR="/sdcard/Android/data/dev.claudewear.wear/files/screenshots"
+APP_ID="dev.claudewear.wear"
+# Relative to the app's data directory, because `run-as` starts there. Internal storage
+# rather than /sdcard: Android 11 closed `/sdcard/Android/data/<pkg>` to the shell user, so
+# `adb pull` returns nothing from there and does not say why.
+DEVICE_SHOT_DIR="files/screenshots"
 BRIDGE_PID=""
 EMULATOR_PID=""
 
@@ -115,8 +119,9 @@ adb shell input keyevent 82 >/dev/null 2>&1 || true
 
 log "installing and running the instrumented tests"
 cd "$REPO_ROOT/wear"
-# The emulator may be one CI kept around; last run's photographs are not this run's.
-adb shell rm -rf "$DEVICE_SHOT_DIR" >/dev/null 2>&1 || true
+# The emulator may be one CI kept around; last run's photographs are not this run's. Fails
+# harmlessly when the app is not installed yet, which is the usual case.
+adb exec-out run-as "$APP_ID" rm -rf "$DEVICE_SHOT_DIR" >/dev/null 2>&1 || true
 TEST_STATUS=0
 ./gradlew --no-daemon :app:connectedDebugAndroidTest \
   "-Pandroid.testInstrumentationRunnerArguments.bridgeUrl=http://10.0.2.2:$BRIDGE_PORT" \
@@ -126,7 +131,18 @@ TEST_STATUS=0
 # Pulled before the status check, because a screen that looks wrong is often *why* the run
 # failed, and that is exactly when you want the picture.
 log "collecting the screen tour"
-if adb pull "$DEVICE_SHOT_DIR/." "$SHOT_DIR" >/dev/null 2>&1; then
+pull_shots() {
+  local names name
+  names="$(adb exec-out run-as "$APP_ID" ls "$DEVICE_SHOT_DIR" 2>/dev/null | tr -d '\r')"
+  [[ -n "$names" ]] || return 1
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    # exec-out rather than shell: no pty means no CRLF translation to corrupt a PNG.
+    adb exec-out run-as "$APP_ID" cat "$DEVICE_SHOT_DIR/$name" >"$SHOT_DIR/$name"
+  done <<<"$names"
+}
+
+if pull_shots; then
   log "$(find "$SHOT_DIR" -name '*.png' | wc -l | tr -d '[:space:]') screenshots in ${SHOT_DIR#"$REPO_ROOT"/}"
 else
   warn "no screenshots on the device; ScreenTourTest may not have run"
