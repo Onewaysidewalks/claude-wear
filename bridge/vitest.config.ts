@@ -12,8 +12,9 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       include: ["src/**/*.ts"],
-      // Generated, and the real SDK adapter is M1.
-      exclude: ["src/protocol.ts", "src/runner/sdk.ts"],
+      // Generated. The SDK adapter came off this list in M1: test/fake-query.ts stands in
+      // for query(), so it is covered like anything else.
+      exclude: ["src/protocol.ts"],
     },
   },
 });

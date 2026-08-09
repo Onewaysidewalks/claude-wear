@@ -38,6 +38,10 @@ e2e: ## Full loop: fake bridge + Wear emulator + the real app
 dev: ## Run the bridge with a fake agent, no API key and no network
 	cd bridge && npm run dev
 
+.PHONY: cli
+cli: ## Drive a running bridge from a terminal. ARGS='--pair 12345678 --new ~/code/thing'
+	cd bridge && npm run --silent cli -- $(ARGS)
+
 .PHONY: ci
 ci: protocol-check bridge android ## Everything CI runs except the emulator job
 

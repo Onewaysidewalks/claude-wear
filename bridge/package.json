@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "bin": {
-    "claude-wear-bridge": "dist/cli.js"
+    "claude-wear-bridge": "dist/cli.js",
+    "claude-wear-cli": "dist/bridge-cli.js"
   },
   "files": [
     "dist",
@@ -22,9 +23,11 @@
     "lint": "eslint .",
     "test": "vitest run",
     "start": "node dist/cli.js",
-    "dev": "npm run build && FAKE_AGENT=1 node dist/cli.js"
+    "dev": "npm run build && FAKE_AGENT=1 node dist/cli.js",
+    "cli": "npm run build && node dist/bridge-cli.js"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.226",
     "ws": "^8.18.0"
   },
   "devDependencies": {

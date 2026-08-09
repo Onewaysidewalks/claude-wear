@@ -7,6 +7,7 @@ import type { BridgeConfig } from "../src/config.js";
 import { Inbox } from "../src/inbox.js";
 import { PROTOCOL_VERSION, type ClientMessage, type ServerEvent, type ServerEventOf } from "../src/protocol.js";
 import { FakeAgentRunner } from "../src/runner/fake.js";
+import type { AgentRunner } from "../src/runner/types.js";
 import { BridgeServer } from "../src/server.js";
 import { SessionRegistry } from "../src/sessions.js";
 
@@ -25,8 +26,10 @@ export function baseConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig 
     stateDir: mkdtempSync(join(tmpdir(), "claude-wear-test-")),
     defaultMode: "default",
     allowedRoots: [],
+    allowBypassPermissions: false,
     inbox: true,
     pair: true,
+    configPath: null,
     ...overrides,
   };
 }
@@ -121,13 +124,19 @@ export interface TestBridge {
   stop(): Promise<void>;
 }
 
-export async function startTestBridge(overrides: Partial<BridgeConfig> = {}): Promise<TestBridge> {
+export async function startTestBridge(
+  overrides: Partial<BridgeConfig> = {},
+  /** Swap in the real SDK runner (behind a fake `query()`) to exercise the whole stack. */
+  injectedRunner?: AgentRunner,
+): Promise<TestBridge> {
   const config = baseConfig(overrides);
-  const runner = new FakeAgentRunner({
-    scenarioDir: config.scenarioDir ?? undefined,
-    rotation: config.scenarios,
-    timeScale: config.timeScale,
-  });
+  const runner =
+    injectedRunner ??
+    new FakeAgentRunner({
+      scenarioDir: config.scenarioDir ?? undefined,
+      rotation: config.scenarios,
+      timeScale: config.timeScale,
+    });
   const auth = new AuthStore(config.stateDir);
   const inbox = new Inbox(config.inbox);
   const registry = new SessionRegistry({

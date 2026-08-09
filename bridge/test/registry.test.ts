@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -123,6 +123,80 @@ describe("resume across a restart", () => {
   it("does not resume a directory it has never seen", () => {
     const stub = new StubRunner();
     const { reg } = registry({ runner: stub });
+    reg.create(projectDir, null);
+    expect(stub.options.resume).toBeNull();
+  });
+
+  it("resumes the chat you were last talking to in that directory, not the first one ever", async () => {
+    const first = registry();
+    const older = first.reg.create(projectDir, "older");
+    await settle();
+    await first.reg.close(older.id);
+    const newer = first.reg.create(projectDir, "newer");
+    await settle();
+    await first.reg.close(newer.id);
+
+    const stub = new StubRunner();
+    registry({ runner: stub }).reg.create(projectDir, null);
+    expect(stub.options.resume).toBe(`fake_${newer.id}`);
+  });
+
+  it("keeps one resume point per directory rather than a row per chat ever opened", async () => {
+    const { reg } = registry();
+    for (let i = 0; i < 3; i += 1) {
+      const session = reg.create(projectDir, `chat ${i}`);
+      await settle();
+      await reg.close(session.id);
+    }
+    const onDisk = JSON.parse(readFileSync(join(stateDir, "sessions.json"), "utf8"));
+    expect(Object.keys(onDisk)).toHaveLength(1);
+  });
+
+  it("will not resume a directory a live session is already holding", async () => {
+    const stub = new StubRunner();
+    const { reg } = registry({ runner: stub });
+    const live = reg.create(projectDir, "live");
+    stub.emit({ type: "init", agentSessionId: "agent-live" });
+    await settle();
+    expect(live.resumeId).toBe("agent-live");
+
+    // Two query() calls resuming one agent session id would write over each other.
+    reg.create(projectDir, "second");
+    expect(stub.options.resume).toBeNull();
+  });
+
+  it("reuses the name you gave a chat when it resumes", async () => {
+    const first = registry();
+    const session = first.reg.create(projectDir, "the wear app");
+    await settle();
+    await first.reg.close(session.id);
+
+    const stub = new StubRunner();
+    const { reg } = registry({ runner: stub });
+    expect(reg.create(projectDir, null).summary().name).toBe("the wear app");
+  });
+
+  it("lists what a restart could pick up again, newest first and one per directory", async () => {
+    const other = mkdtempSync(join(tmpdir(), "claude-wear-other-"));
+    try {
+      const { reg } = registry();
+      const a = reg.create(projectDir, "a");
+      await settle();
+      await reg.close(a.id);
+      const b = reg.create(other, "b");
+      await settle();
+      await reg.close(b.id);
+      expect(reg.resumable().map((r) => r.cwd)).toEqual([other, projectDir]);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  it("survives a sessions.json that has been hand-edited into nonsense", () => {
+    writeFileSync(join(stateDir, "sessions.json"), '{"s_1": {"agentSessionId": 7}, "s_2": null}');
+    const stub = new StubRunner();
+    const { reg } = registry({ runner: stub });
+    expect(reg.resumable()).toEqual([]);
     reg.create(projectDir, null);
     expect(stub.options.resume).toBeNull();
   });
