@@ -1,6 +1,5 @@
 package dev.claudewear.wear.data
 
-import dev.claudewear.wear.transport.WebSocketTransport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -32,7 +31,7 @@ object Pairing {
         baseUrl: String,
         code: String,
         deviceName: String,
-        client: OkHttpClient = WebSocketTransport.defaultClient(),
+        client: OkHttpClient = Http.client(),
     ): PairResult = withContext(Dispatchers.IO) {
         val body = """{"code":"$code","deviceName":"$deviceName"}""".toRequestBody(jsonMediaType)
         val request = Request.Builder().url("${baseUrl.trimEnd('/')}/pair").post(body).build()

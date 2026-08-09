@@ -4,7 +4,7 @@ import android.util.Log
 import dev.claudewear.protocol.ClientMessage
 import dev.claudewear.protocol.ProtocolJson
 import dev.claudewear.protocol.ServerEvent
-import java.util.concurrent.TimeUnit
+import dev.claudewear.wear.data.Http
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +30,7 @@ private const val TAG = "WebSocketTransport"
 class WebSocketTransport(
     baseUrl: String,
     private val token: String,
-    private val client: OkHttpClient = defaultClient(),
+    private val client: OkHttpClient = Http.client(),
 ) : ClientTransport {
 
     private val url = baseUrl.trimEnd('/').replaceFirst("http", "ws") + "/ws"
@@ -82,15 +82,5 @@ class WebSocketTransport(
 
     override suspend fun send(msg: ClientMessage) {
         live.filterNotNull().first().send(ProtocolJson.encodeToString(msg))
-    }
-
-    companion object {
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            // A canUseTool request may sit unanswered for hours; the ping is what keeps the
-            // socket alive across that without anything being sent on it.
-            .pingInterval(30, TimeUnit.SECONDS)
-            .readTimeout(0, TimeUnit.MILLISECONDS)
-            .build()
     }
 }
