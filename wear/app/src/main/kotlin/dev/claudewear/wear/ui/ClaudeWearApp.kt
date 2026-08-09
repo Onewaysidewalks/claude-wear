@@ -1,155 +1,116 @@
 package dev.claudewear.wear.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.items
-import androidx.wear.compose.material.Chip
-import androidx.wear.compose.material.ChipDefaults
+import androidx.compose.runtime.LaunchedEffect
 import androidx.wear.compose.material.MaterialTheme
-import androidx.wear.compose.material.Scaffold
-import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
-import dev.claudewear.protocol.SessionSummary
+import androidx.wear.compose.navigation.SwipeDismissableNavHost
+import androidx.wear.compose.navigation.composable
+import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
+import dev.claudewear.protocol.PermissionMode
+
+/** How a pairing attempt is going, which is the one thing the Pair screen cannot derive. */
+data class PairingState(val busy: Boolean = false, val error: String? = null)
 
 /**
- * The M0 stub UI: enough to pair, see the chats, and watch a turn arrive.
+ * Everything a screen can ask for, bound once in `MainActivity`.
  *
- * M2 replaces this with the real Pair / Sessions / Chat screens and M3 adds the question
- * and permission cards. Nothing here is meant to survive; it exists so the E2E loop is a
- * real app talking to a real bridge rather than a test harness pretending to be one.
+ * A single bag rather than a dozen lambdas threaded through the nav graph: the screens are
+ * pure functions of [WatchState] plus this, which is what keeps them previewable and keeps
+ * the connection in the service where it belongs.
+ */
+data class WatchActions(
+    val pair: (baseUrl: String, code: String) -> Unit = { _, _ -> },
+    val unpair: () -> Unit = {},
+    val newSession: (cwd: String) -> Unit = {},
+    val prompt: (sessionId: String, text: String) -> Unit = { _, _ -> },
+    val interrupt: (sessionId: String) -> Unit = {},
+    val setMode: (sessionId: String, mode: PermissionMode) -> Unit = { _, _ -> },
+)
+
+private object Route {
+    const val PAIR = "pair"
+    const val SESSIONS = "sessions"
+    const val NEW_CHAT = "new"
+    const val CHAT = "chat/{sessionId}"
+    const val MODE = "mode/{sessionId}"
+
+    fun chat(sessionId: String) = "chat/$sessionId"
+    fun mode(sessionId: String) = "mode/$sessionId"
+}
+
+/**
+ * Pair → Sessions → Chat, with swipe-to-dismiss as the back gesture because that is what
+ * a round screen with no back button has.
  */
 @Composable
 fun ClaudeWearApp(
     paired: Boolean,
     state: WatchState,
     defaultBridgeUrl: String,
-    pairingError: String?,
-    onPair: (baseUrl: String, code: String) -> Unit,
-    onNewSession: (cwd: String) -> Unit,
+    pairing: PairingState,
+    actions: WatchActions,
 ) {
     MaterialTheme {
-        Scaffold(timeText = { TimeText() }) {
-            if (paired) SessionsScreen(state, onNewSession) else PairScreen(defaultBridgeUrl, pairingError, onPair)
-        }
-    }
-}
+        val nav = rememberSwipeDismissableNavController()
 
-@Composable
-private fun PairScreen(defaultBridgeUrl: String, error: String?, onPair: (String, String) -> Unit) {
-    var url by remember { mutableStateOf(defaultBridgeUrl) }
-    var code by remember { mutableStateOf("") }
-
-    ScalingLazyColumn(modifier = Modifier.fillMaxWidth()) {
-        item { Text("Pair with your bridge", style = MaterialTheme.typography.title3) }
-        item { Field(value = url, onValueChange = { url = it }, numeric = false) }
-        item { Text("8-digit code", style = MaterialTheme.typography.caption1) }
-        item { Field(value = code, onValueChange = { code = it.filter(Char::isDigit).take(8) }, numeric = true) }
-        item {
-            Chip(
-                onClick = { onPair(url.trim(), code) },
-                label = { Text("Pair") },
-                enabled = code.length == 8,
-                colors = ChipDefaults.primaryChipColors(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        if (error != null) {
-            item { Text(error, style = MaterialTheme.typography.caption2, color = MaterialTheme.colors.error) }
-        }
-    }
-}
-
-@Composable
-private fun Field(value: String, onValueChange: (String) -> Unit, numeric: Boolean) {
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = true,
-        textStyle = TextStyle(color = Color.White),
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
-        keyboardOptions = KeyboardOptions(
-            keyboardType = if (numeric) KeyboardType.NumberPassword else KeyboardType.Uri,
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF2B2B2B))
-            .padding(8.dp),
-    )
-}
-
-@Composable
-private fun SessionsScreen(state: WatchState, onNewSession: (String) -> Unit) {
-    // Typed rather than picked: which project roots the bridge exposes is still open, and
-    // it wants to be a list the bridge sends. M1.
-    var cwd by remember { mutableStateOf("") }
-
-    ScalingLazyColumn(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        item {
-            Text(
-                if (state.connected) "${state.sessions.size}/${state.maxSessions} chats" else "connecting…",
-                style = MaterialTheme.typography.caption1,
-            )
-        }
-        state.lastTurn?.let { turn ->
-            item {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(turn.sessionName, style = MaterialTheme.typography.title3)
-                    Text(turn.summary, style = MaterialTheme.typography.body2)
-                }
+        // Pairing and unpairing both happen underneath the nav graph, so the graph follows
+        // rather than leads; popping to the root stops a swipe going back to a screen that
+        // has no connection behind it any more.
+        LaunchedEffect(paired) {
+            val destination = if (paired) Route.SESSIONS else Route.PAIR
+            if (nav.currentDestination?.route != destination) {
+                nav.navigate(destination) { popUpTo(nav.graph.id) { inclusive = true } }
             }
         }
-        items(state.sessions) { session -> SessionRow(session) }
-        item { Field(value = cwd, onValueChange = { cwd = it }, numeric = false) }
-        item {
-            Chip(
-                onClick = { onNewSession(cwd.trim()) },
-                label = { Text("New chat") },
-                enabled = cwd.isNotBlank(),
-                colors = ChipDefaults.secondaryChipColors(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        items(state.transcript.takeLast(5)) { line ->
-            Text(line, style = MaterialTheme.typography.caption2)
-        }
-        state.error?.let { message ->
-            item { Text(message, style = MaterialTheme.typography.caption2, color = MaterialTheme.colors.error) }
+
+        SwipeDismissableNavHost(
+            navController = nav,
+            startDestination = if (paired) Route.SESSIONS else Route.PAIR,
+        ) {
+            composable(Route.PAIR) {
+                PairScreen(defaultBridgeUrl = defaultBridgeUrl, pairing = pairing, onPair = actions.pair)
+            }
+
+            composable(Route.SESSIONS) {
+                SessionsScreen(
+                    state = state,
+                    onOpen = { nav.navigate(Route.chat(it)) },
+                    onNewChat = { nav.navigate(Route.NEW_CHAT) },
+                    onUnpair = actions.unpair,
+                )
+            }
+
+            composable(Route.NEW_CHAT) {
+                NewChatScreen(
+                    state = state,
+                    onStart = { cwd ->
+                        actions.newSession(cwd)
+                        nav.popBackStack()
+                    },
+                )
+            }
+
+            composable(Route.CHAT) { entry ->
+                val sessionId = entry.arguments?.getString("sessionId").orEmpty()
+                ChatScreen(
+                    state = state,
+                    sessionId = sessionId,
+                    onPrompt = { text -> actions.prompt(sessionId, text) },
+                    onInterrupt = { actions.interrupt(sessionId) },
+                    onModes = { nav.navigate(Route.mode(sessionId)) },
+                )
+            }
+
+            composable(Route.MODE) { entry ->
+                val sessionId = entry.arguments?.getString("sessionId").orEmpty()
+                ModeScreen(
+                    current = state.session(sessionId)?.mode,
+                    onPick = { mode ->
+                        actions.setMode(sessionId, mode)
+                        nav.popBackStack()
+                    },
+                )
+            }
         }
     }
-}
-
-@Composable
-private fun SessionRow(session: SessionSummary) {
-    // The name leads, because "may I run npm test?" is not answerable when two chats are waiting.
-    Chip(
-        onClick = {},
-        label = { Text(session.name) },
-        secondaryLabel = { Text(badge(session)) },
-        colors = ChipDefaults.secondaryChipColors(),
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-private fun badge(session: SessionSummary): String = when {
-    session.pendingRequestIds.isNotEmpty() -> "awaiting you"
-    else -> session.state.name.lowercase()
 }

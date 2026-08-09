@@ -198,6 +198,18 @@ describe("a single chat, end to end", () => {
     await renamed;
   });
 
+  it("re-broadcasts the list after a mode change, so the chip you tapped is the one you see", async () => {
+    const { client } = await pairedClient({ scenarios: ["quick-idle"] });
+    const created = client.waitFor("sessions", (e) => e.sessions.length === 1);
+    client.send({ type: "newSession", cwd: projectA, name: "modes" });
+    const { sessions } = await created;
+    expect(sessions[0]!.mode).toBe("default");
+
+    const switched = client.waitFor("sessions", (e) => e.sessions[0]?.mode === "acceptEdits");
+    client.send({ type: "setMode", sessionId: sessions[0]!.sessionId, mode: "acceptEdits" });
+    await switched;
+  });
+
   it("rejects a chat past --max-sessions with a clear error", async () => {
     const { client } = await pairedClient({ maxSessions: 1, scenarios: ["quick-idle"] });
     client.send({ type: "newSession", cwd: projectA, name: "one" });

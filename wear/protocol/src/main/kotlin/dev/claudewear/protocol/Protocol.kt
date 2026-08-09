@@ -294,6 +294,8 @@ public data class SessionsEvent(
     override val seq: Long,
     public val sessions: List<SessionSummary>,
     public val maxSessions: Long,
+    /** Directories a chat may open, so the watch offers a pick list rather than asking you to type a path on a 1.5" screen. Empty means the bridge is configured permissively and any existing directory will do. */
+    public val projectRoots: List<String>,
 ) : ServerEvent
 
 /** Assistant text, summarised rather than streamed. A watch does not need token-by-token deltas and not sending them is a meaningful battery saving. */

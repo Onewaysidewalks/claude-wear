@@ -133,8 +133,9 @@ class SdkAgentHandle implements AgentHandle {
     }
   }
 
-  setPermissionMode(mode: PermissionMode): void {
-    this.permissionMode = mode;
+  setPermissionMode(mode: PermissionMode): boolean {
+    // Checked before the field is written: a refused mode must leave no trace anywhere the
+    // watch can read it, or the wrist ends up claiming the agent stopped asking when it did not.
     if (mode === "bypassPermissions" && !this.allowBypassPermissions) {
       this.options.onError(
         new Error(
@@ -142,12 +143,14 @@ class SdkAgentHandle implements AgentHandle {
             "want the agent to stop asking.",
         ),
       );
-      return;
+      return false;
     }
+    this.permissionMode = mode;
     this.query?.setPermissionMode(mode).catch((err: Error) => {
       log.warn("the agent refused a permission-mode change", { sessionId: this.options.sessionId, mode, error: err.message });
       this.options.onError(new Error(`could not switch to ${mode}: ${err.message}`));
     });
+    return true;
   }
 
   async close(): Promise<void> {

@@ -278,7 +278,8 @@ to `destination === "localSettings"`, in `updatedPermissions` — so the rule pe
 Watch → bridge: `hello`, `subscribe`, `newSession`, `prompt`, `answer`, `permission`,
 `interrupt`, `setMode`, `renameSession`.
 Bridge → watch: `sessions`, `turn`, `ask`, `permission`, `text`, `done`, `resolved`,
-`error`.
+`error`. The `sessions` snapshot also carries `projectRoots` — the directories the bridge
+will open — because the alternative is typing an absolute path on a 1.5" screen.
 
 Every server event carries `sessionId` and a **per-session** monotonic `seq` so the watch
 can detect gaps and re-sync after a reconnect. Assistant text is sent **summarized, not
@@ -504,10 +505,10 @@ be a deliberate one.
 | --- | --- | --- |
 | M0 | Scaffold: monorepo, protocol schema + codegen, `FakeAgentRunner`, CI green | `make e2e` passes with a stub UI |
 | M1 | Bridge on the real Agent SDK; pairing/tokens; `bridge-cli` for terminal-driving it | Real Claude session driven end-to-end from the CLI |
-| M2 | Wear app: pairing, session list, chat, connection service, vibrate on turn (`ClientTransport` + `NotificationTransport` seams in place) | Watch buzzes on a real `result` |
+| M2 | Wear app: pairing, session list, chat, connection service, vibrate on turn (`ClientTransport` + `NotificationTransport` seams in place). Reconnect-with-backoff came here too, because a foreground service that gives up on the first dropped Wi-Fi is worse than no service | Watch buzzes on a real `result` |
 | M3 | AUQ card + permission card + voice reply (in-app and from the shade) | Full scripted E2E green on emulator |
 | M4 | Release pipeline: signed APK to Releases + matched bridge tarball | A merge to `main` produces an installable APK |
-| M5 | Hardening: reconnect/replay, battery pass, multi-session stress, tailnet access from outside the house | — |
+| M5 | Hardening: battery pass, multi-session stress, reconnect under real radio conditions, tailnet access from outside the house | — |
 | L | Phone-relay `ClientTransport`, FCM `NotificationTransport`, hosted bridge | Battery data from M5 says which of these is actually needed |
 
 ---
@@ -569,4 +570,9 @@ either answer.
    rather than a required setup step. An unknown key in it is an error, because a mistyped
    `projectRoot` that silently opens your whole home directory is the failure this is for.
 2. Confirm the target device/OS level so `minSdk` and the emulator image are pinned to
-   what you actually wear. Needed by M2.
+   what you actually wear. **Still open after M2**, which shipped on the assumed target —
+   `minSdk` 30, `compileSdk`/`targetSdk` 34, a Wear OS 5 Galaxy Watch — because nothing in
+   the app needed a decision the assumption could not carry. What it costs to be wrong is
+   still one line of `libs.versions.toml` and the emulator image in `scripts/e2e.sh`; what
+   it would change on a much older watch is the foreground-service type and the
+   notification permission, both of which are already version-guarded.

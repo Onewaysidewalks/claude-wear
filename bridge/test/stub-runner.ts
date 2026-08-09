@@ -18,6 +18,8 @@ export class StubRunner implements AgentRunner {
   options!: RunnerOptions;
   readonly prompts: string[] = [];
   readonly modes: string[] = [];
+  /** Set false to play a runner that refuses a mode, the way the SDK one refuses bypass. */
+  acceptsModes = true;
   interrupted = 0;
   closed = 0;
 
@@ -30,6 +32,7 @@ export class StubRunner implements AgentRunner {
       },
       setPermissionMode: (mode) => {
         this.modes.push(mode);
+        return this.acceptsModes;
       },
       close: async () => {
         this.closed += 1;

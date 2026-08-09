@@ -127,8 +127,9 @@ class FakeAgentHandle implements AgentHandle {
     });
   }
 
-  setPermissionMode(mode: PermissionMode): void {
+  setPermissionMode(mode: PermissionMode): boolean {
     log.debug("fake runner permission mode", { sessionId: this.options.sessionId, mode });
+    return true;
   }
 
   async close(): Promise<void> {

@@ -73,6 +73,9 @@ export class SessionRegistry {
       seq: this.registrySeq,
       sessions: this.list().map((s) => s.summary()),
       maxSessions: this.options.maxSessions,
+      // Sent on every snapshot rather than once at hello, because it is small and because
+      // a watch that reconnected after the bridge was reconfigured should see the new list.
+      projectRoots: this.options.allowedRoots ?? [],
     };
   }
 

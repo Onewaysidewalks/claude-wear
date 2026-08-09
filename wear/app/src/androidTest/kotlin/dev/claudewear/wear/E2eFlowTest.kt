@@ -4,28 +4,33 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.claudewear.protocol.SessionState
 import dev.claudewear.protocol.TurnEvent
+import dev.claudewear.wear.data.Http
 import dev.claudewear.wear.data.Pairing
 import dev.claudewear.wear.notify.NotificationTransport
 import dev.claudewear.wear.transport.WebSocketTransport
-import dev.claudewear.wear.ui.SessionsViewModel
+import dev.claudewear.wear.ui.SessionsClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import okhttp3.Request
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The M0 end-to-end loop, on a Wear emulator against a bridge running `--fake` on the host.
+ * The end-to-end loop, on a Wear emulator against a bridge running `--fake` on the host.
  *
- * Pair, list sessions, receive a turn — the app's own transport and ViewModel, not a test
- * harness pretending to be them. The full scripted run (answer an AUQ, approve a permission,
- * dictate a reply) is M3, once there are cards to drive.
+ * Pair, list sessions, open a chat, say something, receive a turn — the app's own transport
+ * and client, not a test harness pretending to be them. Answering an AUQ and approving a
+ * permission join this once there are cards to drive them, in M3.
  *
  * scripts/e2e.sh supplies bridgeUrl, pairCode and cwd, and asserts against the bridge's
  * recorded inbox afterwards.
@@ -50,7 +55,7 @@ class E2eFlowTest {
 
         val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         val turns = mutableListOf<TurnEvent>()
-        val viewModel = SessionsViewModel(
+        val client = SessionsClient(
             transport = WebSocketTransport(bridgeUrl, pairing.token),
             notifications = NotificationTransport { turns += it },
             scope = scope,
@@ -59,35 +64,75 @@ class E2eFlowTest {
         )
 
         try {
-            viewModel.start()
+            client.start()
 
-            // Connected: the bridge answered `hello` with a snapshot.
-            withTimeout(TIMEOUT_MS) { viewModel.state.first { it.connected } }
+            // Connected: the bridge answered `hello` with a snapshot, and the snapshot says
+            // which directories the New chat screen may offer.
+            val connected = withTimeout(TIMEOUT_MS) { client.state.first { it.connected } }
+            assertEquals(listOf(cwd), connected.projectRoots)
 
-            viewModel.newSession(cwd, "e2e")
+            client.newSession(cwd, "e2e")
 
-            val listed = withTimeout(TIMEOUT_MS) { viewModel.state.first { it.sessions.isNotEmpty() } }
-            assertEquals(1, listed.sessions.size)
-            assertEquals("e2e", listed.sessions.single().name)
-            assertEquals(cwd, listed.sessions.single().cwd)
+            val listed = withTimeout(TIMEOUT_MS) { client.state.first { it.sessions.isNotEmpty() } }
+            val session = listed.sessions.single()
+            assertEquals("e2e", session.name)
+            assertEquals(cwd, session.cwd)
 
             // And it is your turn: the fake agent finished, or it is blocked on you.
             val turned = withTimeout(TIMEOUT_MS) {
-                viewModel.state.first { state ->
-                    state.lastTurn?.state.let { it == SessionState.IDLE || it == SessionState.AWAITING }
+                client.state.first { state ->
+                    val live = state.session(session.sessionId)
+                    live?.state == SessionState.IDLE || live?.awaiting == true
                 }
             }
             val turn = requireNotNull(turned.lastTurn)
             assertEquals("e2e", turn.sessionName)
             assertTrue("a turn should say something", turn.summary.isNotEmpty())
             assertTrue("the notification transport should have been told", turns.isNotEmpty())
+
+            // A prompt from the chat screen shows up in the chat immediately, because the
+            // bridge does not reflect prompts back and a chat that swallows what you just
+            // said looks broken. That echo is local, though, so it is not evidence the
+            // frame ever left the watch — for that, ask the bridge what it received.
+            client.prompt(session.sessionId, PROMPT)
+            val said = withTimeout(TIMEOUT_MS) {
+                client.state.first { it.transcript(session.sessionId).any { line -> line.text == PROMPT } }
+            }
+            assertTrue(said.transcript(session.sessionId).isNotEmpty())
+            withTimeout(TIMEOUT_MS) {
+                while (!bridgeReceived("prompt")) delay(200)
+            }
         } finally {
-            viewModel.stop()
+            client.stop()
             scope.cancel()
         }
     }
 
+    /**
+     * What `--inbox` recorded. `scripts/e2e.sh` asserts against the same endpoint once the
+     * run is over; the test polls it so it does not tear its scope down — and with it the
+     * coroutine doing the sending — in the window between the local echo and the write.
+     */
+    private suspend fun bridgeReceived(type: String): Boolean {
+        val body = withContext(Dispatchers.IO) {
+            val request = Request.Builder().url("${bridgeUrl.trimEnd('/')}/debug/inbox").build()
+            Http.client().newCall(request).execute().use { response ->
+                // Distinguished from "not yet", which is the whole point of polling: an
+                // inbox that is off would otherwise look like a prompt that never arrived.
+                check(response.code != 404) { "the bridge's inbox is off; scripts/e2e.sh starts it with --inbox" }
+                if (!response.isSuccessful) return@withContext null
+                response.body?.string()
+            }
+        } ?: return false
+
+        val entries = JSONObject(body).getJSONArray("entries")
+        return (0 until entries.length())
+            .map { entries.getJSONObject(it) }
+            .any { it.optString("direction") == "in" && it.optString("type") == type }
+    }
+
     private companion object {
         const val TIMEOUT_MS = 30_000L
+        const val PROMPT = "and now the linter"
     }
 }

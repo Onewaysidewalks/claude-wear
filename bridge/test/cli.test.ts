@@ -30,7 +30,7 @@ function summary(overrides: Partial<SessionSummary> = {}): SessionSummary {
 }
 
 function sessions(...list: SessionSummary[]): ServerEvent {
-  return { type: "sessions", sessionId: "@registry", seq: 1, sessions: list, maxSessions: 5 };
+  return { type: "sessions", sessionId: "@registry", seq: 1, sessions: list, maxSessions: 5, projectRoots: [] };
 }
 
 const FORMAT: AskQuestion = {

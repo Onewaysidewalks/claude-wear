@@ -464,6 +464,8 @@ export interface SessionsEvent {
   seq: number;
   sessions: SessionSummary[];
   maxSessions: number;
+  /** Directories a chat may open, so the watch offers a pick list rather than asking you to type a path on a 1.5" screen. Empty means the bridge is configured permissively and any existing directory will do. */
+  projectRoots: string[];
 }
 
 /** Assistant text, summarised rather than streamed. A watch does not need token-by-token deltas and not sending them is a meaningful battery saving. */
@@ -1061,7 +1063,8 @@ export const SERVER_EVENT_SCHEMAS: Readonly<Record<ServerEventType, JsonSchema>>
       "sessionId",
       "seq",
       "sessions",
-      "maxSessions"
+      "maxSessions",
+      "projectRoots"
     ],
     "properties": {
       "type": {
@@ -1081,6 +1084,13 @@ export const SERVER_EVENT_SCHEMAS: Readonly<Record<ServerEventType, JsonSchema>>
       },
       "maxSessions": {
         "type": "integer"
+      },
+      "projectRoots": {
+        "description": "Directories a chat may open, so the watch offers a pick list rather than asking you to type a path on a 1.5\" screen. Empty means the bridge is configured permissively and any existing directory will do.",
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
       }
     }
   },
