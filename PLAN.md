@@ -28,7 +28,7 @@ in detail.
 
 1. Everything runs and is testable on a laptop with no cloud dependencies and no API key
    (via a fake agent runner).
-2. Merge to `master` publishes a signed APK to GitHub Releases.
+2. Merge to `main` publishes a signed APK to GitHub Releases.
 3. Watch app scope: notify/vibrate on turn, voice-to-text reply, multiple chats,
    AskUserQuestion (AUQ) and permission prompts.
 
@@ -425,7 +425,7 @@ host at `10.0.2.2`.
 
 ## CI/CD
 
-### `.github/workflows/ci.yml` — on PR and on `master`
+### `.github/workflows/ci.yml` — on PR and on `main`
 
 | Job | Steps |
 | --- | --- |
@@ -434,7 +434,7 @@ host at `10.0.2.2`.
 | `contract` | regenerate types from `protocol/schema`, fail if the working tree is dirty; run golden tests both sides |
 | `e2e` | `reactivecircus/android-emulator-runner` (KVM on `ubuntu-latest`), runs `scripts/e2e.sh` |
 
-### `.github/workflows/release.yml` — on push to `master`
+### `.github/workflows/release.yml` — on push to `main`
 
 1. Run the full `ci.yml` suite as a gate (reusable workflow).
 2. Version: `v0.1.<github.run_number>`, written into `versionName`/`versionCode`.
@@ -497,7 +497,7 @@ be a deliberate one.
 | M1 | Bridge on the real Agent SDK; pairing/tokens; `bridge-cli` for terminal-driving it | Real Claude session driven end-to-end from the CLI |
 | M2 | Wear app: pairing, session list, chat, connection service, vibrate on turn (`ClientTransport` + `NotificationTransport` seams in place) | Watch buzzes on a real `result` |
 | M3 | AUQ card + permission card + voice reply (in-app and from the shade) | Full scripted E2E green on emulator |
-| M4 | Release pipeline: signed APK to Releases + matched bridge tarball | A merge to `master` produces an installable APK |
+| M4 | Release pipeline: signed APK to Releases + matched bridge tarball | A merge to `main` produces an installable APK |
 | M5 | Hardening: reconnect/replay, battery pass, multi-session stress, tailnet access from outside the house | — |
 | L | Phone-relay `ClientTransport`, FCM `NotificationTransport`, hosted bridge | Battery data from M5 says which of these is actually needed |
 
