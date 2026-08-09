@@ -99,10 +99,14 @@ The three flags worth knowing:
 - **`projectRoots`** / **`--project-root`** restricts which directories a chat may open.
   The bridge runs shell commands as you, on the machine holding your code; this is the
   cheapest real limit on that. **Empty means any existing directory**, and the bridge says
-  so at startup.
+  so at startup. The roots also travel in every `sessions` snapshot, so the watch's New
+  chat screen is a list of taps rather than a path you have to type on a 1.5" screen —
+  which makes configuring them a usability win as well as a safety one.
 - **`--allow-bypass-permissions`** is off by default. In `bypassPermissions` the agent
   stops asking, so the watch stops buzzing; the SDK demands an explicit opt-in for it and
-  so does the bridge. Without the flag, a watch asking for that mode gets a clean error.
+  so does the bridge. Without the flag, a watch asking for that mode gets a clean error
+  and the chat keeps the mode it had — a wrist that reads `bypassPermissions` over an
+  agent that is still asking would be worse than the error.
 
 `--inbox` exposes `GET /debug/inbox`, a recording of everything the watch sent. E2E asserts
 against it. It is off by default and should stay that way outside a test run.

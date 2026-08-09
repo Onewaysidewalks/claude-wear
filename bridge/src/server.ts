@@ -280,9 +280,14 @@ export class BridgeServer {
       case "interrupt":
         void registry.require(message.sessionId).interrupt();
         return;
-      case "setMode":
+      case "setMode": {
+        // The mode lives in the summary, and summaries only reach a watch in a snapshot.
+        // Without this the chip you just tapped keeps reading `default` until something
+        // else happens to rebroadcast the list.
         registry.require(message.sessionId).setMode(message.mode);
+        this.broadcast(registry.snapshot());
         return;
+      }
       case "renameSession": {
         registry.require(message.sessionId).rename(message.name);
         this.broadcast(registry.snapshot());

@@ -311,8 +311,10 @@ export class Session {
   }
 
   setMode(mode: PermissionMode): void {
+    // A runner that says no has already said why through onError; adopting the mode anyway
+    // would leave the watch showing a setting that is not in force.
+    if (!this.handle.setPermissionMode(mode)) return;
     this.mode = mode;
-    this.handle.setPermissionMode(mode);
     this.emit({ type: "text", text: `Permission mode is now ${mode}.` });
   }
 

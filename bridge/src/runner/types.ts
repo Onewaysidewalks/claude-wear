@@ -60,7 +60,13 @@ export interface AgentHandle {
   /** Push a follow-up user message into the live session. */
   push(text: string): void;
   interrupt(): Promise<void>;
-  setPermissionMode(mode: PermissionMode): void;
+  /**
+   * False when the runner refused outright -- today only `bypassPermissions` on a bridge
+   * that did not opt into it. The session keeps its old mode in that case, because a watch
+   * showing `bypassPermissions` over an agent that is still asking is the one direction
+   * this control must never be wrong in.
+   */
+  setPermissionMode(mode: PermissionMode): boolean;
   close(): Promise<void>;
 }
 

@@ -276,6 +276,14 @@ describe("session controls", () => {
     expect(session.summary().mode).toBe("acceptEdits");
   });
 
+  it("keeps the old mode when the runner refuses the new one", () => {
+    const { runner, session } = makeSession();
+    runner.acceptsModes = false;
+    session.setMode("bypassPermissions");
+    // The wrist must not read `bypassPermissions` over an agent that is still asking.
+    expect(session.summary().mode).toBe("default");
+  });
+
   it("renames, and the next turn card leads with the new name", () => {
     const { session, last } = makeSession();
     session.rename("wear app");
