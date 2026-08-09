@@ -25,6 +25,15 @@ bridge: ## Lint, typecheck and test the bridge
 android: ## Unit-test, lint and assemble the watch app
 	cd wear && ./gradlew :protocol:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
+.PHONY: screenshots
+screenshots: ## Re-record the watch screenshots after an intended UI change
+	cd wear && ./gradlew :app:recordRoborazziDebug
+	@echo "recorded — review wear/app/src/test/screenshots/ before committing"
+
+.PHONY: screenshots-check
+screenshots-check: ## Fail if any screen no longer matches its committed screenshot
+	cd wear && ./gradlew :app:verifyRoborazziDebug
+
 .PHONY: contract
 contract: protocol-check ## Run the protocol contract tests on both sides
 	cd bridge && npx vitest run test/protocol-golden.test.ts
@@ -43,7 +52,7 @@ cli: ## Drive a running bridge from a terminal. ARGS='--pair 12345678 --new ~/co
 	cd bridge && npm run --silent cli -- $(ARGS)
 
 .PHONY: ci
-ci: protocol-check bridge android ## Everything CI runs except the emulator job
+ci: protocol-check bridge android screenshots-check ## Everything CI runs except the emulator job
 
 .PHONY: clean
 clean: ## Remove build output

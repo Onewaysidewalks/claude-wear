@@ -14,10 +14,7 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
-import androidx.wear.compose.material.PositionIndicator
-import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
 
 /**
  * Where the new chat runs.
@@ -32,7 +29,7 @@ fun NewChatScreen(state: WatchState, onStart: (cwd: String) -> Unit) {
     var typed by rememberSaveable { mutableStateOf("") }
     val listState = rememberScalingLazyListState()
 
-    Scaffold(timeText = { TimeText() }, positionIndicator = { PositionIndicator(listState) }) {
+    WatchScaffold(listState) {
         ScalingLazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),

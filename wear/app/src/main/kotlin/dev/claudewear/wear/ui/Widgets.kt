@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,9 +18,15 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.wear.compose.foundation.lazy.ScalingLazyListState
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
+import androidx.wear.compose.material.PositionIndicator
+import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.TimeSource
+import androidx.wear.compose.material.TimeText
+import androidx.wear.compose.material.TimeTextDefaults
 
 /**
  * Text entry, such as it is on a watch: the platform keyboard, handwriting, or whatever
@@ -64,6 +71,29 @@ fun Field(
             )
         }
     }
+}
+
+/**
+ * The clock a screen draws, or null for the real one.
+ *
+ * Nothing in the app ever provides this; [Gallery] does. A screenshot whose top edge is the
+ * current time is a screenshot that stops matching a minute after it was taken, and there is
+ * no way to hold Robolectric's wall clock still — it is the host's.
+ */
+internal val LocalTimeSource = staticCompositionLocalOf<TimeSource?> { null }
+
+/**
+ * The chrome every screen wears: the time across the top of the bezel, the scroll position
+ * down the side of it.
+ */
+@Composable
+fun WatchScaffold(listState: ScalingLazyListState, content: @Composable () -> Unit) {
+    val time = LocalTimeSource.current ?: TimeTextDefaults.timeSource(TimeTextDefaults.timeFormat())
+    Scaffold(
+        timeText = { TimeText(timeSource = time) },
+        positionIndicator = { PositionIndicator(listState) },
+        content = content,
+    )
 }
 
 /** A header line, for the top of a ScalingLazyColumn. */

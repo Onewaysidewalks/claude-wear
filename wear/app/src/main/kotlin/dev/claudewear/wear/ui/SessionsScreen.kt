@@ -11,10 +11,7 @@ import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.CompactChip
-import androidx.wear.compose.material.PositionIndicator
-import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
 import dev.claudewear.protocol.SessionState
 
 /**
@@ -32,7 +29,7 @@ fun SessionsScreen(
 ) {
     val listState = rememberScalingLazyListState()
 
-    Scaffold(timeText = { TimeText() }, positionIndicator = { PositionIndicator(listState) }) {
+    WatchScaffold(listState) {
         ScalingLazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),

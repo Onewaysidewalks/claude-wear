@@ -18,10 +18,7 @@ import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.CompactChip
 import androidx.wear.compose.material.MaterialTheme
-import androidx.wear.compose.material.PositionIndicator
-import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
 import dev.claudewear.protocol.PermissionMode
 import dev.claudewear.protocol.SessionState
 
@@ -52,7 +49,7 @@ fun ChatScreen(
         if (transcript.isNotEmpty() && last >= 0) listState.animateScrollToItem(last)
     }
 
-    Scaffold(timeText = { TimeText() }, positionIndicator = { PositionIndicator(listState) }) {
+    WatchScaffold(listState) {
         ScalingLazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),

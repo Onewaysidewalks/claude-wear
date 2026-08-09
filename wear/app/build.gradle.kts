@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -38,8 +39,10 @@ android {
 
     sourceSets {
         named("main") { java.srcDirs("src/main/kotlin") }
-        named("test") { java.srcDirs("src/test/kotlin") }
-        named("androidTest") { java.srcDirs("src/androidTest/kotlin") }
+        // src/screenshots is in both: the Robolectric goldens and the on-device tour pose the
+        // screens identically, and they can only be trusted to if they share the code doing it.
+        named("test") { java.srcDirs("src/test/kotlin", "src/screenshots/kotlin") }
+        named("androidTest") { java.srcDirs("src/androidTest/kotlin", "src/screenshots/kotlin") }
     }
 
     packaging {
@@ -48,6 +51,8 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Robolectric draws the real widgets, so it needs the real resources.
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -70,6 +75,7 @@ dependencies {
     implementation(libs.wear.compose.foundation)
     implementation(libs.wear.compose.navigation)
     implementation(libs.wear.ongoing)
+    implementation(libs.wear.tooling.preview)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.coroutines.android)
@@ -80,8 +86,20 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+
+    // Supplies the bare ComponentActivity that both the Roborazzi captures and the on-device
+    // tour host the screens in. Debug-only, so it never reaches a release build.
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.kotlinx.coroutines.test)
+    // androidTest does not inherit the app's `implementation`, so it needs the BOM of its own
+    // or the Compose test artifacts resolve to no version at all.
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }

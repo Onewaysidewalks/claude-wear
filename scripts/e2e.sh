@@ -13,6 +13,8 @@
 #   AVD_NAME      default wearos_small_round
 #   SYSTEM_IMAGE  default system-images;android-34;android-wear;x86_64
 #   KEEP_BRIDGE   set to 1 to leave the bridge running after the test
+#
+# Leaves a photograph of every screen in .e2e/shots/, taken on the emulator by ScreenTourTest.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,6 +24,8 @@ SYSTEM_IMAGE="${SYSTEM_IMAGE:-system-images;android-34;android-wear;x86_64}"
 WORK_DIR="$REPO_ROOT/.e2e"
 BRIDGE_LOG="$WORK_DIR/bridge.log"
 BRIDGE_STATE="$WORK_DIR/state"
+SHOT_DIR="$WORK_DIR/shots"
+DEVICE_SHOT_DIR="/sdcard/Android/data/dev.claudewear.wear/files/screenshots"
 BRIDGE_PID=""
 EMULATOR_PID=""
 
@@ -47,7 +51,7 @@ cleanup() {
 trap cleanup EXIT
 
 rm -rf "$WORK_DIR"
-mkdir -p "$WORK_DIR" "$BRIDGE_STATE"
+mkdir -p "$WORK_DIR" "$BRIDGE_STATE" "$SHOT_DIR"
 
 # --- 1. the bridge, with a fake agent -----------------------------------------------
 
@@ -109,12 +113,26 @@ adb shell input keyevent 82 >/dev/null 2>&1 || true
 
 # --- 3. the app ---------------------------------------------------------------------
 
-log "installing and running the instrumented test"
+log "installing and running the instrumented tests"
 cd "$REPO_ROOT/wear"
+# The emulator may be one CI kept around; last run's photographs are not this run's.
+adb shell rm -rf "$DEVICE_SHOT_DIR" >/dev/null 2>&1 || true
+TEST_STATUS=0
 ./gradlew --no-daemon :app:connectedDebugAndroidTest \
   "-Pandroid.testInstrumentationRunnerArguments.bridgeUrl=http://10.0.2.2:$BRIDGE_PORT" \
   "-Pandroid.testInstrumentationRunnerArguments.pairCode=$PAIR_CODE" \
-  "-Pandroid.testInstrumentationRunnerArguments.cwd=$REPO_ROOT"
+  "-Pandroid.testInstrumentationRunnerArguments.cwd=$REPO_ROOT" || TEST_STATUS=$?
+
+# Pulled before the status check, because a screen that looks wrong is often *why* the run
+# failed, and that is exactly when you want the picture.
+log "collecting the screen tour"
+if adb pull "$DEVICE_SHOT_DIR/." "$SHOT_DIR" >/dev/null 2>&1; then
+  log "$(find "$SHOT_DIR" -name '*.png' | wc -l | tr -d '[:space:]') screenshots in ${SHOT_DIR#"$REPO_ROOT"/}"
+else
+  warn "no screenshots on the device; ScreenTourTest may not have run"
+fi
+
+[[ $TEST_STATUS -eq 0 ]] || die "the instrumented tests failed"
 
 # --- 4. assert against what the bridge actually received -----------------------------
 
