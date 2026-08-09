@@ -82,6 +82,10 @@ async function main(): Promise<void> {
   if (config.fake) {
     lines.push("  FAKE AGENT — replaying scenarios, no API key and no network");
   }
+  const resumable = registry.resumable();
+  if (resumable.length > 0) {
+    lines.push(`  resumable   ${resumable.map((r) => r.cwd).join(", ")}`);
+  }
   if (config.inbox) {
     lines.push(`  inbox       http://${address}:${port}/debug/inbox`);
   }

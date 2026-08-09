@@ -26,7 +26,8 @@ export interface SessionRegistryOptions {
   allowedRoots?: string[];
 }
 
-interface PersistedSession {
+/** One row of `~/.claude-wear/sessions.json`: which agent session a directory maps to. */
+export interface PersistedSession {
   cwd: string;
   name: string;
   agentSessionId: string | null;
@@ -107,8 +108,8 @@ export class SessionRegistry {
     this.assertUsableCwd(absolute);
 
     const id = `s_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
-    const previous = [...this.persisted.entries()].find(([, p]) => p.cwd === absolute)?.[1] ?? null;
-    const sessionName = name?.trim() || basename(absolute);
+    const previous = this.resumePointFor(absolute);
+    const sessionName = name?.trim() || previous?.name || basename(absolute);
     const session = new Session({
       id,
       cwd: absolute,
@@ -118,10 +119,7 @@ export class SessionRegistry {
       scenario,
       resume: previous?.agentSessionId ?? null,
       emit: (event) => this.broadcast(event),
-      onAgentSessionId: (agentSessionId) => {
-        this.persisted.set(id, { cwd: absolute, name: sessionName, agentSessionId, updatedAt: Date.now() });
-        this.savePersisted();
-      },
+      onAgentSessionId: (agentSessionId) => this.rememberResumePoint(id, absolute, sessionName, agentSessionId),
     });
     this.sessions.set(id, session);
     log.info("session created", { sessionId: id, cwd: absolute, resume: previous?.agentSessionId ?? null });
@@ -188,6 +186,45 @@ export class SessionRegistry {
   // ~/.claude/projects/<encoded-cwd>/*.jsonl. All the bridge keeps is the mapping from
   // its own chats to those session ids, so a restart resumes instead of losing context.
 
+  /**
+   * The chat to continue when a new session opens in `cwd`, or null for a fresh start.
+   *
+   * Most recent wins: after several chats in one directory you want the one you were last
+   * talking to, not the first you ever opened. A directory a *live* session already holds
+   * is deliberately not resumable -- two `query()` calls resuming one agent session id
+   * would have them writing over each other's transcript.
+   */
+  resumePointFor(cwd: string): PersistedSession | null {
+    const absolute = resolve(cwd);
+    if ([...this.sessions.values()].some((s) => s.cwd === absolute)) return null;
+    return (
+      [...this.persisted.values()]
+        .filter((p) => p.cwd === absolute && p.agentSessionId !== null)
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null
+    );
+  }
+
+  /** Chats a restart could pick up again. Printed at startup and listed by the CLI. */
+  resumable(): PersistedSession[] {
+    const seen = new Set<string>();
+    return [...this.persisted.values()]
+      .filter((p) => p.agentSessionId !== null)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .filter((p) => (seen.has(p.cwd) ? false : (seen.add(p.cwd), true)));
+  }
+
+  /**
+   * One resume point per directory. Without the prune, `sessions.json` grows by a row for
+   * every chat ever opened and the file becomes a log rather than a lookup.
+   */
+  private rememberResumePoint(id: string, cwd: string, name: string, agentSessionId: string): void {
+    for (const [other, entry] of this.persisted) {
+      if (other !== id && entry.cwd === cwd) this.persisted.delete(other);
+    }
+    this.persisted.set(id, { cwd, name, agentSessionId, updatedAt: Date.now() });
+    this.savePersisted();
+  }
+
   private get persistPath(): string {
     return join(this.options.stateDir, "sessions.json");
   }
@@ -195,7 +232,16 @@ export class SessionRegistry {
   private loadPersisted(): void {
     try {
       const raw = JSON.parse(readFileSync(this.persistPath, "utf8")) as Record<string, PersistedSession>;
-      for (const [id, entry] of Object.entries(raw)) this.persisted.set(id, entry);
+      for (const [id, entry] of Object.entries(raw)) {
+        // A hand-edited or half-written state file should cost you resume, not startup.
+        if (typeof entry?.cwd !== "string") continue;
+        this.persisted.set(id, {
+          cwd: entry.cwd,
+          name: typeof entry.name === "string" ? entry.name : basename(entry.cwd),
+          agentSessionId: typeof entry.agentSessionId === "string" ? entry.agentSessionId : null,
+          updatedAt: typeof entry.updatedAt === "number" ? entry.updatedAt : 0,
+        });
+      }
       log.debug("loaded persisted sessions", { count: this.persisted.size });
     } catch {
       /* first run */
