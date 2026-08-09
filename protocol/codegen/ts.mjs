@@ -57,7 +57,7 @@ function emitInterface(struct) {
   return lines.join("");
 }
 
-export function emitTypeScript({ enums, structs, messages }) {
+export function emitTypeScript({ enums, structs, messages, common }) {
   const out = [HEADER];
 
   out.push(`
@@ -68,6 +68,14 @@ export const REGISTRY_SESSION_ID = ${JSON.stringify(REGISTRY_SESSION_ID)};
 
 export type JsonSchema = Readonly<Record<string, unknown>>;
 `);
+
+  out.push(
+    `\n/** The shared $defs, so the runtime validator can resolve $ref without reading the repo. */\nexport const COMMON_SCHEMA: JsonSchema = ${JSON.stringify(
+      common,
+      null,
+      2,
+    )};\n`,
+  );
 
   for (const e of enums) {
     out.push("\n");

@@ -1,0 +1,12 @@
+[
+  { "at": 0, "emit": { "type": "assistant", "text": "Deploy script is ready." } },
+  {
+    "at": 50,
+    "permission": {
+      "tool": "Bash",
+      "input": { "command": "./deploy.sh production", "description": "Deploy to production" },
+      "suggestions": []
+    }
+  },
+  { "at": 600000, "emit": { "type": "result", "subtype": "success", "result": "Deployed." } }
+]

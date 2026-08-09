@@ -134,7 +134,7 @@ export function loadSchemas() {
 
   enums.sort((a, b) => a.name.localeCompare(b.name));
   structs.sort((a, b) => a.name.localeCompare(b.name));
-  return { enums, structs, messages };
+  return { enums, structs, messages, common };
 }
 
 /** Golden fixtures, sorted, with the direction they belong to. */
