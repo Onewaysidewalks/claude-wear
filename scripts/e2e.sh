@@ -137,8 +137,14 @@ const wants = (list, type, where) => {
 wants(received, "hello", "received");
 wants(received, "subscribe", "received");
 wants(received, "newSession", "received");
+wants(received, "prompt", "received");
 wants(sent, "sessions", "sent");
 wants(sent, "turn", "sent");
+
+const snapshot = entries.find((e) => e.direction === "out" && e.type === "sessions");
+if (snapshot && !Array.isArray(snapshot.payload.projectRoots)) {
+  failures.push("the snapshot carried no projectRoots for the New chat screen to offer");
+}
 
 const hello = entries.find((e) => e.direction === "in" && e.type === "hello");
 if (hello && hello.payload.protocolVersion !== 1) {

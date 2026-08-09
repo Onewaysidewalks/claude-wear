@@ -8,6 +8,14 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- The socket outlives the Activity, which is the only way a blocked agent can reach
+         you twenty minutes after you dropped your wrist. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Without this the Ongoing Activity is invisible on API 33+, and an invisible
+         foreground service is exactly the kind of background socket this should not be. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -36,5 +44,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".service.ConnectionService"
+            android:description="@string/service_description"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

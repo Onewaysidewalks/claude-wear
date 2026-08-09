@@ -7,7 +7,7 @@ import dev.claudewear.protocol.TurnEvent
 import dev.claudewear.wear.data.Pairing
 import dev.claudewear.wear.notify.NotificationTransport
 import dev.claudewear.wear.transport.WebSocketTransport
-import dev.claudewear.wear.ui.SessionsViewModel
+import dev.claudewear.wear.ui.SessionsClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,11 +21,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The M0 end-to-end loop, on a Wear emulator against a bridge running `--fake` on the host.
+ * The end-to-end loop, on a Wear emulator against a bridge running `--fake` on the host.
  *
- * Pair, list sessions, receive a turn — the app's own transport and ViewModel, not a test
- * harness pretending to be them. The full scripted run (answer an AUQ, approve a permission,
- * dictate a reply) is M3, once there are cards to drive.
+ * Pair, list sessions, open a chat, say something, receive a turn — the app's own transport
+ * and client, not a test harness pretending to be them. Answering an AUQ and approving a
+ * permission join this once there are cards to drive them, in M3.
  *
  * scripts/e2e.sh supplies bridgeUrl, pairCode and cwd, and asserts against the bridge's
  * recorded inbox afterwards.
@@ -50,7 +50,7 @@ class E2eFlowTest {
 
         val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         val turns = mutableListOf<TurnEvent>()
-        val viewModel = SessionsViewModel(
+        val client = SessionsClient(
             transport = WebSocketTransport(bridgeUrl, pairing.token),
             notifications = NotificationTransport { turns += it },
             scope = scope,
@@ -59,30 +59,41 @@ class E2eFlowTest {
         )
 
         try {
-            viewModel.start()
+            client.start()
 
-            // Connected: the bridge answered `hello` with a snapshot.
-            withTimeout(TIMEOUT_MS) { viewModel.state.first { it.connected } }
+            // Connected: the bridge answered `hello` with a snapshot, and the snapshot says
+            // which directories the New chat screen may offer.
+            val connected = withTimeout(TIMEOUT_MS) { client.state.first { it.connected } }
+            assertEquals(listOf(cwd), connected.projectRoots)
 
-            viewModel.newSession(cwd, "e2e")
+            client.newSession(cwd, "e2e")
 
-            val listed = withTimeout(TIMEOUT_MS) { viewModel.state.first { it.sessions.isNotEmpty() } }
-            assertEquals(1, listed.sessions.size)
-            assertEquals("e2e", listed.sessions.single().name)
-            assertEquals(cwd, listed.sessions.single().cwd)
+            val listed = withTimeout(TIMEOUT_MS) { client.state.first { it.sessions.isNotEmpty() } }
+            val session = listed.sessions.single()
+            assertEquals("e2e", session.name)
+            assertEquals(cwd, session.cwd)
 
             // And it is your turn: the fake agent finished, or it is blocked on you.
             val turned = withTimeout(TIMEOUT_MS) {
-                viewModel.state.first { state ->
-                    state.lastTurn?.state.let { it == SessionState.IDLE || it == SessionState.AWAITING }
+                client.state.first { state ->
+                    val live = state.session(session.sessionId)
+                    live?.state == SessionState.IDLE || live?.awaiting == true
                 }
             }
             val turn = requireNotNull(turned.lastTurn)
             assertEquals("e2e", turn.sessionName)
             assertTrue("a turn should say something", turn.summary.isNotEmpty())
             assertTrue("the notification transport should have been told", turns.isNotEmpty())
+
+            // A prompt from the chat screen lands in this chat's transcript, and in the
+            // bridge's inbox, which is what scripts/e2e.sh checks afterwards.
+            client.prompt(session.sessionId, "and now the linter")
+            val said = withTimeout(TIMEOUT_MS) {
+                client.state.first { it.transcript(session.sessionId).any { line -> line.text == "and now the linter" } }
+            }
+            assertTrue(said.transcript(session.sessionId).isNotEmpty())
         } finally {
-            viewModel.stop()
+            client.stop()
             scope.cancel()
         }
     }

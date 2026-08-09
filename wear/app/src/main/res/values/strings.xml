@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">claude-wear</string>
+    <string name="service_description">Holds the connection to your bridge so a blocked agent can still reach your wrist.</string>
 </resources>
