@@ -267,12 +267,53 @@ to `destination === "localSettings"`, in `updatedPermissions` — so the rule pe
 ### Wire protocol (v1)
 
 Watch → bridge: `hello`, `subscribe`, `newSession`, `prompt`, `answer`, `permission`,
-`interrupt`, `setMode`.
-Bridge → watch: `sessions`, `turn`, `ask`, `permission`, `text`, `done`, `error`.
+`interrupt`, `setMode`, `renameSession`.
+Bridge → watch: `sessions`, `turn`, `ask`, `permission`, `text`, `done`, `resolved`,
+`error`.
 
-Every server event carries `sessionId` and a monotonic `seq` so the watch can detect gaps
-and re-sync after a reconnect. Assistant text is sent **summarized, not streamed** — a
-watch doesn't need token-by-token deltas, and it's a meaningful battery saving.
+Every server event carries `sessionId` and a **per-session** monotonic `seq` so the watch
+can detect gaps and re-sync after a reconnect. Assistant text is sent **summarized, not
+streamed** — a watch doesn't need token-by-token deltas, and it's a meaningful battery
+saving.
+
+---
+
+## Multiple sessions, end to end
+
+Concurrent chats are a first-class requirement, and most of the design already assumes
+them — `SessionRegistry`, one `query()` per chat, `sessionId` on every event, the
+awaiting-first session list. The parts that need pinning down are the ones where two
+sessions competing for your attention behave differently from one.
+
+**Identity on the wrist.** Vibration patterns distinguish event *kind* (question ≠
+permission ≠ idle), which is not enough when two sessions want you at once. So:
+
+- One notification **per session**, keyed by a stable notification id derived from
+  `sessionId`, in a Wear notification **group** with a summary. Three waiting sessions are
+  three cards you can swipe between, not one that overwrites the others.
+- Every card leads with the session's name — a user-set label, defaulting to the `cwd`
+  basename. "claude-wear · may I run npm test?" is answerable at a glance; "may I run npm
+  test?" is not.
+- The reply action's `RemoteInput` carries the `sessionId` **and** the `requestId` in its
+  PendingIntent extras, so a dictated answer from the shade resolves the specific pending
+  request it was attached to. Without that, a voice reply with three sessions waiting is a
+  coin flip.
+
+**Stale requests.** A pending request can be answered from the phone, the CLI, or another
+watch while its card is still on screen. The bridge broadcasts a `resolved` event carrying
+`requestId`; the watch cancels that notification. Answering an already-resolved request
+gets a clean error rather than a silent no-op, and the card says so.
+
+**Reconnect replay is global, not per-session.** On `subscribe` the bridge replays every
+outstanding request across *all* sessions, plus each session's current `seq`. Walking out
+of range with three sessions blocked returns you to three cards.
+
+**Concurrency has a real cost.** Each `query()` runs its own agent loop with its own
+context window, and the SDK drives a Claude Code CLI subprocess per session — so N
+sessions is N subprocesses and N independent token spends, on a machine that is also
+running your editor. The bridge takes a `--max-sessions` cap (default 5) and rejects
+`newSession` past it with a clear error rather than quietly thrashing the host. Worth
+measuring in M5's multi-session stress pass before raising it.
 
 ---
 
@@ -317,9 +358,11 @@ the connection survives Doze while a session is live. Exponential-backoff reconn
 `subscribe` replays anything missed.
 
 **Alerting.** `VibrationEffect` with distinct patterns per event kind (question ≠
-permission ≠ idle) plus a notification carrying a `RemoteInput` action — so a voice reply
-can be dictated straight from the notification without opening the app. This is the
-"buzz and answer without looking" path and it's the one to get right.
+permission ≠ idle), plus one grouped notification per session carrying a `RemoteInput`
+action — so a voice reply can be dictated straight from the notification without opening
+the app. This is the "buzz and answer without looking" path and it's the one to get right;
+see *Multiple sessions* for how a reply routes to the correct session when more than one
+is waiting.
 
 **Voice-to-text.** `RecognizerIntent.ACTION_RECOGNIZE_SPEECH` in-app and `RemoteInput` in
 the shade. Both use the platform recognizer: on-device, free, no extra API key, and it
@@ -362,11 +405,12 @@ fixture. Nothing in CI needs a secret, a container registry, or a running deploy
 
 | Layer | Tooling | What it covers |
 | --- | --- | --- |
-| Bridge unit | Vitest | turn derivation, AUQ answer mapping, pending-request replay on reconnect, pairing |
+| Bridge unit | Vitest | turn derivation, AUQ answer mapping, pending-request replay on reconnect, pairing, `--max-sessions` rejection, answering an already-resolved request |
 | Protocol contract | Vitest + JUnit | both sides decode **and** re-encode every `protocol/golden/*.json`; drift fails CI |
 | Wear unit | JUnit + Turbine | ViewModels against a fake WS transport; no device needed |
 | Wear UI | Robolectric + Compose test rule | question card renders 4 options, multiSelect toggles, permission card shows the command |
-| E2E | Wear emulator + fake bridge | full loop, scripted |
+| Wear notifications | Robolectric + `ShadowNotificationManager` | three concurrent sessions produce three grouped notifications; a shade reply resolves the right `requestId`; a `resolved` event cancels the right card |
+| E2E | Wear emulator + fake bridge | full loop, scripted — including two sessions blocked at once |
 
 ### `make e2e`
 
