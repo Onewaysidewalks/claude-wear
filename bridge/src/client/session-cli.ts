@@ -70,6 +70,8 @@ export class BridgeCli {
   /** requestId -> the request, oldest first by insertion. */
   private readonly pending = new Map<string, PendingRequest>();
   private sessions: SessionSummary[] = [];
+  /** What the bridge will let a chat open. Empty means it is configured permissively. */
+  private projectRoots: string[] = [];
   /** Names learned from `turn`, which can outrun the snapshot that would carry them. */
   private readonly names = new Map<string, string>();
   private current: string | null = null;
@@ -117,6 +119,7 @@ export class BridgeCli {
     switch (event.type) {
       case "sessions": {
         this.sessions = event.sessions;
+        this.projectRoots = event.projectRoots;
         // Land on something usable without being asked, so the first thing you type after
         // /new is a prompt rather than a /use.
         if (this.current === null || !this.sessions.some((s) => s.sessionId === this.current)) {
@@ -343,6 +346,9 @@ export class BridgeCli {
   private listSessions(): void {
     if (this.sessions.length === 0) {
       this.line(this.paint("dim", "no chats yet — /new <cwd>"));
+      // The watch turns the same list into chips; here it saves you guessing which paths
+      // the bridge is willing to open.
+      for (const root of this.projectRoots) this.line(this.paint("dim", `  ${root}`));
       return;
     }
     this.sessions.forEach((session, i) => {

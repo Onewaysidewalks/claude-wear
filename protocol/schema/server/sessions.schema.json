@@ -6,12 +6,17 @@
   "x-message": { "direction": "server", "type": "sessions" },
   "type": "object",
   "additionalProperties": false,
-  "required": ["type", "sessionId", "seq", "sessions", "maxSessions"],
+  "required": ["type", "sessionId", "seq", "sessions", "maxSessions", "projectRoots"],
   "properties": {
     "type": { "const": "sessions" },
     "sessionId": { "type": "string" },
     "seq": { "type": "integer" },
     "sessions": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/SessionSummary" } },
-    "maxSessions": { "type": "integer" }
+    "maxSessions": { "type": "integer" },
+    "projectRoots": {
+      "description": "Directories a chat may open, so the watch offers a pick list rather than asking you to type a path on a 1.5\" screen. Empty means the bridge is configured permissively and any existing directory will do.",
+      "type": "array",
+      "items": { "type": "string" }
+    }
   }
 }

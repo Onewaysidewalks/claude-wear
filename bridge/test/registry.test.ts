@@ -76,6 +76,11 @@ describe("creating sessions", () => {
     expect(snapshots.map((e) => e.seq)).toEqual([1, 2]);
     expect(snapshots.at(-1)!.sessions).toEqual([]);
   });
+
+  it("tells the watch which roots it may open, so nobody types a path on a watch", () => {
+    expect(registry().reg.snapshot().projectRoots).toEqual([]);
+    expect(registry({ allowedRoots: [projectDir] }).reg.snapshot().projectRoots).toEqual([projectDir]);
+  });
 });
 
 describe("the session list", () => {

@@ -26,5 +26,6 @@
       "lastActivityAt": 1754740905000
     }
   ],
-  "maxSessions": 5
+  "maxSessions": 5,
+  "projectRoots": ["/home/you/src/claude-wear", "/home/you/src/infra"]
 }
