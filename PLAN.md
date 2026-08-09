@@ -62,10 +62,12 @@ before the watch could buzz once. See *Later: hosting* for what changes if this 
 - **"Galaxy 9"** is read as a current Samsung Galaxy Watch running **Wear OS 5**.
   Target `compileSdk`/`targetSdk` 34, `minSdk` 30 (Wear OS 3+). If you meant a specific
   device with a different OS level, only the Gradle config changes.
-- The bridge runs on a machine that has your code and is **on when you want to use it** —
-  laptop, homelab box, dev container. Reachable from the watch over LAN/Wi-Fi at home, and
-  over a **Tailscale/WireGuard tailnet** when you're out. Not exposed to the public
-  internet.
+- The bridge runs on a machine that has your code and is **always on** — confirmed, so the
+  design leans on it: a `canUseTool` callback may stay pending for hours while the watch is
+  in your pocket, and that only works if the process outlives the wait. An always-on host
+  is what keeps the SDK's `defer` hook out of v1 (see *Deferred*). Reachable over LAN/Wi-Fi
+  at home and over a **Tailscale/WireGuard tailnet** when you're out; not exposed to the
+  public internet.
 - The bridge is **single-user**. Device-scoped tokens let you pair more than one watch,
   but there are no accounts or isolation between them.
 
@@ -492,8 +494,9 @@ protocol field mean the bridge doesn't have to be rewritten to get there.
 ## Deferred (no seam yet)
 
 - **The `defer` hook decision.** The SDK can defer a pending tool call so the process can
-  exit and resume from the persisted session later. That's the right answer for a laptop
-  that sleeps — see *Open questions*, it may be a v1 item after all.
+  exit and resume from the persisted session later. That's the answer for a host that
+  sleeps; with an always-on host, holding the promise open is simpler and loses nothing.
+  Becomes relevant again only if the bridge moves somewhere that can restart under it.
 - **Streaming assistant text**, subagent progress, context-usage display.
 - **Multi-user.** Device tokens let you pair several watches to *your* bridge. Real
   accounts would mean rebuilding auth, not extending it.
@@ -502,12 +505,10 @@ protocol field mean the bridge doesn't have to be rewritten to get there.
 
 ## Open questions
 
-1. **Does the host machine sleep?** The one that actually matters now. The whole design
-   assumes the bridge is up whenever you might glance at your wrist. If it's a laptop
-   that closes, a pending `canUseTool` dies with the process — which promotes the `defer`
-   hook from *Deferred* to a v1 requirement, and makes an always-on box (Pi, NAS, desktop)
-   the better host.
-2. **Which project roots** should the bridge expose? It's the cheapest real limit on blast
-   radius, and it wants to be a config file rather than a code change.
-3. Confirm the target device/OS level so `minSdk` and the emulator image are pinned to
-   what you actually wear.
+Neither of these blocks M0 — the scaffold and the fake-agent E2E loop don't depend on
+either answer.
+
+1. **Which project roots** should the bridge expose? It's the cheapest real limit on blast
+   radius, and it wants to be a config file rather than a code change. Needed by M1.
+2. Confirm the target device/OS level so `minSdk` and the emulator image are pinned to
+   what you actually wear. Needed by M2.
