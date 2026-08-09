@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/set-mode.schema.json",
+  "title": "SetModeMessage",
+  "description": "Change a live session's permission mode. Raising it means fewer wrist buzzes and less oversight.",
+  "x-message": { "direction": "client", "type": "setMode" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "mode"],
+  "properties": {
+    "type": { "const": "setMode" },
+    "sessionId": { "type": "string" },
+    "mode": { "$ref": "common.schema.json#/$defs/PermissionMode" }
+  }
+}

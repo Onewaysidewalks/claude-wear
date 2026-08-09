@@ -1,0 +1,10 @@
+{
+  "type": "done",
+  "sessionId": "s_9f2a",
+  "seq": 20,
+  "subtype": "success",
+  "isError": false,
+  "durationMs": 41200,
+  "numTurns": 6,
+  "result": "Tests pass. One flaky case in sessions.test.ts."
+}

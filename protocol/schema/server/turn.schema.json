@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "server/turn.schema.json",
+  "title": "TurnEvent",
+  "description": "The alerting event: this session's turn state changed. state == awaiting or idle is what buzzes the wrist; NotificationTransport consumes exactly this.",
+  "x-message": { "direction": "server", "type": "turn" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "seq", "state", "reason", "requestId", "sessionName", "summary"],
+  "properties": {
+    "type": { "const": "turn" },
+    "sessionId": { "type": "string" },
+    "seq": { "type": "integer" },
+    "state": { "$ref": "common.schema.json#/$defs/SessionState" },
+    "reason": { "$ref": "common.schema.json#/$defs/TurnReason" },
+    "requestId": {
+      "type": ["string", "null"],
+      "description": "The request that is blocking, when reason is ask or permission. Carried into the notification's RemoteInput so a dictated reply from the shade resolves this exact request."
+    },
+    "sessionName": { "type": "string", "description": "Denormalised so a notification can be built from the turn event alone." },
+    "summary": { "type": "string", "description": "One line, already shortened for a 1.5\" screen." }
+  }
+}

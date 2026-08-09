@@ -1,0 +1,10 @@
+{
+  "type": "done",
+  "sessionId": "s_c410",
+  "seq": 14,
+  "subtype": "error_during_execution",
+  "isError": true,
+  "durationMs": 2100,
+  "numTurns": 1,
+  "result": null
+}

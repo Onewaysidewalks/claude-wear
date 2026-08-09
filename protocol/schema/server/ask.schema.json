@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "server/ask.schema.json",
+  "title": "AskEvent",
+  "description": "canUseTool fired for AskUserQuestion. The agent is blocked until an answer or interrupt comes back.",
+  "x-message": { "direction": "server", "type": "ask" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "seq", "requestId", "questions"],
+  "properties": {
+    "type": { "const": "ask" },
+    "sessionId": { "type": "string" },
+    "seq": { "type": "integer" },
+    "requestId": { "type": "string" },
+    "questions": {
+      "description": "1-4 questions, 2-4 options each.",
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/AskQuestion" }
+    }
+  }
+}

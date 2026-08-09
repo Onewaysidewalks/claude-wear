@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/rename-session.schema.json",
+  "title": "RenameSessionMessage",
+  "description": "Relabel a chat. Every notification card leads with this name, which is what makes two waiting sessions answerable at a glance.",
+  "x-message": { "direction": "client", "type": "renameSession" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "name"],
+  "properties": {
+    "type": { "const": "renameSession" },
+    "sessionId": { "type": "string" },
+    "name": { "type": "string" }
+  }
+}

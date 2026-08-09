@@ -1,0 +1,7 @@
+{
+  "type": "permission",
+  "sessionId": "s_c410",
+  "requestId": "req_e02c",
+  "decision": "deny",
+  "message": "don't delete anything, show me what you'd remove first"
+}

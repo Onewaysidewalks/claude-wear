@@ -1,0 +1,8 @@
+{
+  "type": "error",
+  "sessionId": "@registry",
+  "seq": 5,
+  "code": "maxSessions",
+  "message": "5 sessions already running; close one first",
+  "requestId": null
+}

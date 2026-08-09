@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "server/done.schema.json",
+  "title": "DoneEvent",
+  "description": "A result message arrived: the agent finished its turn and it is yours.",
+  "x-message": { "direction": "server", "type": "done" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "seq", "subtype", "isError", "durationMs", "numTurns", "result"],
+  "properties": {
+    "type": { "const": "done" },
+    "sessionId": { "type": "string" },
+    "seq": { "type": "integer" },
+    "subtype": { "$ref": "common.schema.json#/$defs/DoneSubtype" },
+    "isError": { "type": "boolean" },
+    "durationMs": { "type": "integer" },
+    "numTurns": { "type": "integer" },
+    "result": { "type": ["string", "null"] }
+  }
+}

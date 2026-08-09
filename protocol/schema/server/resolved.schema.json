@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "server/resolved.schema.json",
+  "title": "ResolvedEvent",
+  "description": "A pending request stopped being pending - possibly answered from the CLI, the phone, or another watch. The watch cancels that notification.",
+  "x-message": { "direction": "server", "type": "resolved" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "seq", "requestId", "resolution", "by"],
+  "properties": {
+    "type": { "const": "resolved" },
+    "sessionId": { "type": "string" },
+    "seq": { "type": "integer" },
+    "requestId": { "type": "string" },
+    "resolution": { "$ref": "common.schema.json#/$defs/Resolution" },
+    "by": { "type": ["string", "null"], "description": "deviceId that answered, when a device did." }
+  }
+}

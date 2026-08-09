@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/interrupt.schema.json",
+  "title": "InterruptMessage",
+  "description": "Stop a runaway agent from the wrist.",
+  "x-message": { "direction": "client", "type": "interrupt" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId"],
+  "properties": {
+    "type": { "const": "interrupt" },
+    "sessionId": { "type": "string" }
+  }
+}

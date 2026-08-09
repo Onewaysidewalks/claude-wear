@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "server/sessions.schema.json",
+  "title": "SessionsEvent",
+  "description": "Snapshot of every chat. Registry-scoped, so sessionId is the reserved id '@registry' and seq counts on the registry's own stream.",
+  "x-message": { "direction": "server", "type": "sessions" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "seq", "sessions", "maxSessions"],
+  "properties": {
+    "type": { "const": "sessions" },
+    "sessionId": { "type": "string" },
+    "seq": { "type": "integer" },
+    "sessions": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/SessionSummary" } },
+    "maxSessions": { "type": "integer" }
+  }
+}

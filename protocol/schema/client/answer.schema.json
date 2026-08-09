@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/answer.schema.json",
+  "title": "AnswerMessage",
+  "description": "Answer an AskUserQuestion. Set answers to pick options (values are labels, or dictated free text). Set response instead to dismiss the questions and just talk to Claude. Exactly one of the two is non-null.",
+  "x-message": { "direction": "client", "type": "answer" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "requestId", "answers", "response"],
+  "properties": {
+    "type": { "const": "answer" },
+    "sessionId": { "type": "string" },
+    "requestId": { "type": "string" },
+    "answers": {
+      "description": "question text -> selected label. multiSelect answers are joined with ', '.",
+      "type": ["object", "null"],
+      "additionalProperties": { "type": "string" }
+    },
+    "response": { "type": ["string", "null"] }
+  }
+}

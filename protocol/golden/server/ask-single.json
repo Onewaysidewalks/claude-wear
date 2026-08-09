@@ -1,0 +1,17 @@
+{
+  "type": "ask",
+  "sessionId": "s_9f2a",
+  "seq": 12,
+  "requestId": "req_31d0",
+  "questions": [
+    {
+      "question": "How should I format the output?",
+      "header": "Format",
+      "options": [
+        { "label": "Summary", "description": "A few sentences" },
+        { "label": "Full report", "description": "Every section, with detail" }
+      ],
+      "multiSelect": false
+    }
+  ]
+}

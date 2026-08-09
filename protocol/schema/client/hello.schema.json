@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/hello.schema.json",
+  "title": "HelloMessage",
+  "description": "First frame after the WebSocket upgrade. The bearer token travelled on the upgrade request, not here.",
+  "x-message": { "direction": "client", "type": "hello" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "protocolVersion", "deviceId", "deviceName", "clientVersion"],
+  "properties": {
+    "type": { "const": "hello" },
+    "protocolVersion": { "type": "integer" },
+    "deviceId": { "type": "string" },
+    "deviceName": { "type": "string" },
+    "clientVersion": { "type": "string" }
+  }
+}

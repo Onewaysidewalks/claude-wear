@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "server/text.schema.json",
+  "title": "TextEvent",
+  "description": "Assistant text, summarised rather than streamed. A watch does not need token-by-token deltas and not sending them is a meaningful battery saving.",
+  "x-message": { "direction": "server", "type": "text" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "seq", "text"],
+  "properties": {
+    "type": { "const": "text" },
+    "sessionId": { "type": "string" },
+    "seq": { "type": "integer" },
+    "text": { "type": "string" }
+  }
+}
