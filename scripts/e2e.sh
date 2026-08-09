@@ -126,17 +126,23 @@ TEST_STATUS=0
 ./gradlew --no-daemon :app:connectedDebugAndroidTest \
   "-Pandroid.testInstrumentationRunnerArguments.bridgeUrl=http://10.0.2.2:$BRIDGE_PORT" \
   "-Pandroid.testInstrumentationRunnerArguments.pairCode=$PAIR_CODE" \
-  "-Pandroid.testInstrumentationRunnerArguments.cwd=$REPO_ROOT" || TEST_STATUS=$?
+  "-Pandroid.testInstrumentationRunnerArguments.cwd=$REPO_ROOT" \
+  -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true || TEST_STATUS=$?
 
 # Pulled before the status check, because a screen that looks wrong is often *why* the run
 # failed, and that is exactly when you want the picture.
 log "collecting the screen tour"
 pull_shots() {
   local names name
-  names="$(adb exec-out run-as "$APP_ID" ls "$DEVICE_SHOT_DIR" 2>/dev/null | tr -d '\r')"
+  # Filtered to things that are actually screenshots, because `run-as` reports its own
+  # failures on stdout — "run-as: unknown package: …" once became a filename, and a colon
+  # in a filename is what actually broke the build.
+  names="$(
+    adb exec-out run-as "$APP_ID" ls "$DEVICE_SHOT_DIR" 2>/dev/null |
+      tr -d '\r' | grep -E '^[A-Za-z0-9._-]+\.png$' || true
+  )"
   [[ -n "$names" ]] || return 1
   while IFS= read -r name; do
-    [[ -n "$name" ]] || continue
     # exec-out rather than shell: no pty means no CRLF translation to corrupt a PNG.
     adb exec-out run-as "$APP_ID" cat "$DEVICE_SHOT_DIR/$name" >"$SHOT_DIR/$name"
   done <<<"$names"
