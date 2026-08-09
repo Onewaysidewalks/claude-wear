@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.claudewear.protocol.SessionState
 import dev.claudewear.protocol.TurnEvent
+import dev.claudewear.wear.data.Http
 import dev.claudewear.wear.data.Pairing
 import dev.claudewear.wear.notify.NotificationTransport
 import dev.claudewear.wear.transport.WebSocketTransport
@@ -12,9 +13,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import okhttp3.Request
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -85,20 +90,49 @@ class E2eFlowTest {
             assertTrue("a turn should say something", turn.summary.isNotEmpty())
             assertTrue("the notification transport should have been told", turns.isNotEmpty())
 
-            // A prompt from the chat screen lands in this chat's transcript, and in the
-            // bridge's inbox, which is what scripts/e2e.sh checks afterwards.
-            client.prompt(session.sessionId, "and now the linter")
+            // A prompt from the chat screen shows up in the chat immediately, because the
+            // bridge does not reflect prompts back and a chat that swallows what you just
+            // said looks broken. That echo is local, though, so it is not evidence the
+            // frame ever left the watch — for that, ask the bridge what it received.
+            client.prompt(session.sessionId, PROMPT)
             val said = withTimeout(TIMEOUT_MS) {
-                client.state.first { it.transcript(session.sessionId).any { line -> line.text == "and now the linter" } }
+                client.state.first { it.transcript(session.sessionId).any { line -> line.text == PROMPT } }
             }
             assertTrue(said.transcript(session.sessionId).isNotEmpty())
+            withTimeout(TIMEOUT_MS) {
+                while (!bridgeReceived("prompt")) delay(200)
+            }
         } finally {
             client.stop()
             scope.cancel()
         }
     }
 
+    /**
+     * What `--inbox` recorded. `scripts/e2e.sh` asserts against the same endpoint once the
+     * run is over; the test polls it so it does not tear its scope down — and with it the
+     * coroutine doing the sending — in the window between the local echo and the write.
+     */
+    private suspend fun bridgeReceived(type: String): Boolean {
+        val body = withContext(Dispatchers.IO) {
+            val request = Request.Builder().url("${bridgeUrl.trimEnd('/')}/debug/inbox").build()
+            Http.client().newCall(request).execute().use { response ->
+                // Distinguished from "not yet", which is the whole point of polling: an
+                // inbox that is off would otherwise look like a prompt that never arrived.
+                check(response.code != 404) { "the bridge's inbox is off; scripts/e2e.sh starts it with --inbox" }
+                if (!response.isSuccessful) return@withContext null
+                response.body?.string()
+            }
+        } ?: return false
+
+        val entries = JSONObject(body).getJSONArray("entries")
+        return (0 until entries.length())
+            .map { entries.getJSONObject(it) }
+            .any { it.optString("direction") == "in" && it.optString("type") == type }
+    }
+
     private companion object {
         const val TIMEOUT_MS = 30_000L
+        const val PROMPT = "and now the linter"
     }
 }
