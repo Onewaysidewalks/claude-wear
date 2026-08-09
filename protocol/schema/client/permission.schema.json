@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/permission.schema.json",
+  "title": "PermissionDecisionMessage",
+  "description": "Answer a permission card. allowAlways additionally persists the localSettings suggestions the bridge sent with the request.",
+  "x-message": { "direction": "client", "type": "permission" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "requestId", "decision", "message"],
+  "properties": {
+    "type": { "const": "permission" },
+    "sessionId": { "type": "string" },
+    "requestId": { "type": "string" },
+    "decision": { "$ref": "common.schema.json#/$defs/PermissionDecision" },
+    "message": {
+      "type": ["string", "null"],
+      "description": "Deny reason. Claude sees this, so it adapts instead of retrying blindly."
+    }
+  }
+}

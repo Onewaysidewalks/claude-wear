@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/subscribe.schema.json",
+  "title": "SubscribeMessage",
+  "description": "Ask for a full resync. The bridge answers with a sessions snapshot plus a replay of every outstanding request across all sessions.",
+  "x-message": { "direction": "client", "type": "subscribe" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sinceSeq"],
+  "properties": {
+    "type": { "const": "subscribe" },
+    "sinceSeq": {
+      "description": "sessionId -> highest seq the client already has. null means the client has nothing.",
+      "type": ["object", "null"],
+      "additionalProperties": { "type": "integer" }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+[
+  { "at": 0, "emit": { "type": "assistant", "text": "Reading the changed files…" } },
+  { "at": 150, "emit": { "type": "assistant", "text": "Nothing here needs a decision from you." } },
+  { "at": 100, "emit": { "type": "result", "subtype": "success", "result": "Reviewed 3 files, all clean." } }
+]

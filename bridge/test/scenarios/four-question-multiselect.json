@@ -1,0 +1,51 @@
+[
+  { "at": 0, "emit": { "type": "assistant", "text": "Before I write the report…" } },
+  {
+    "at": 100,
+    "askUserQuestion": {
+      "questions": [
+        {
+          "question": "How should I format the output?",
+          "header": "Format",
+          "options": [
+            { "label": "Summary", "description": "A few sentences" },
+            { "label": "Full report", "description": "Every section, with detail" },
+            { "label": "Table", "description": null }
+          ],
+          "multiSelect": false
+        },
+        {
+          "question": "Which sections?",
+          "header": "Sections",
+          "options": [
+            { "label": "Introduction", "description": null },
+            { "label": "Methods", "description": null },
+            { "label": "Results", "description": null },
+            { "label": "Conclusion", "description": null }
+          ],
+          "multiSelect": true
+        },
+        {
+          "question": "Where should I write it?",
+          "header": "Target",
+          "options": [
+            { "label": "README.md", "description": "Append a section" },
+            { "label": "docs/report.md", "description": "New file" }
+          ],
+          "multiSelect": false
+        },
+        {
+          "question": "Commit when done?",
+          "header": "Commit",
+          "options": [
+            { "label": "Yes", "description": "Commit on a branch" },
+            { "label": "No", "description": "Leave it in the working tree" }
+          ],
+          "multiSelect": false
+        }
+      ]
+    }
+  },
+  { "at": 0, "expectAnswer": true },
+  { "at": 100, "emit": { "type": "result", "subtype": "success", "result": "Report written." } }
+]

@@ -1,0 +1,13 @@
+{
+  "type": "permission",
+  "sessionId": "s_c410",
+  "seq": 9,
+  "requestId": "req_e02c",
+  "tool": "Bash",
+  "input": {
+    "command": "rm -rf build/",
+    "description": "Clean the build directory"
+  },
+  "display": "rm -rf build/",
+  "suggestions": []
+}

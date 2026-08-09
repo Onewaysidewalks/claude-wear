@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/new-session.schema.json",
+  "title": "NewSessionMessage",
+  "description": "Start a chat in a directory that already exists. The bridge never clones or provisions anything.",
+  "x-message": { "direction": "client", "type": "newSession" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "cwd", "name"],
+  "properties": {
+    "type": { "const": "newSession" },
+    "cwd": { "type": "string" },
+    "name": { "type": ["string", "null"], "description": "Defaults to the cwd basename." }
+  }
+}

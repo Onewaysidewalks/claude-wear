@@ -1,0 +1,20 @@
+{
+  "type": "permission",
+  "sessionId": "s_9f2a",
+  "seq": 17,
+  "requestId": "req_8b57",
+  "tool": "Bash",
+  "input": {
+    "command": "npm test",
+    "description": "Run the test suite"
+  },
+  "display": "npm test",
+  "suggestions": [
+    {
+      "type": "addRules",
+      "behavior": "allow",
+      "destination": "localSettings",
+      "rules": [{ "toolName": "Bash", "ruleContent": "npm test:*" }]
+    }
+  ]
+}

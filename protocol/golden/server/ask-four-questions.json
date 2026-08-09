@@ -1,0 +1,47 @@
+{
+  "type": "ask",
+  "sessionId": "s_9f2a",
+  "seq": 30,
+  "requestId": "req_44aa",
+  "questions": [
+    {
+      "question": "How should I format the output?",
+      "header": "Format",
+      "options": [
+        { "label": "Summary", "description": "A few sentences" },
+        { "label": "Full report", "description": "Every section, with detail" },
+        { "label": "Table", "description": null }
+      ],
+      "multiSelect": false
+    },
+    {
+      "question": "Which sections?",
+      "header": "Sections",
+      "options": [
+        { "label": "Introduction", "description": null },
+        { "label": "Methods", "description": null },
+        { "label": "Results", "description": null },
+        { "label": "Conclusion", "description": null }
+      ],
+      "multiSelect": true
+    },
+    {
+      "question": "Where should I write it?",
+      "header": "Target",
+      "options": [
+        { "label": "README.md", "description": "Append a section" },
+        { "label": "docs/report.md", "description": "New file" }
+      ],
+      "multiSelect": false
+    },
+    {
+      "question": "Commit when done?",
+      "header": "Commit",
+      "options": [
+        { "label": "Yes", "description": "Commit on a branch" },
+        { "label": "No", "description": "Leave it in the working tree" }
+      ],
+      "multiSelect": false
+    }
+  ]
+}

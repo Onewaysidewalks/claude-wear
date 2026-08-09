@@ -1,0 +1,30 @@
+{
+  "type": "sessions",
+  "sessionId": "@registry",
+  "seq": 4,
+  "sessions": [
+    {
+      "sessionId": "s_9f2a",
+      "name": "claude-wear",
+      "cwd": "/home/you/src/claude-wear",
+      "state": "awaiting",
+      "mode": "default",
+      "seq": 17,
+      "pendingRequestIds": ["req_8b57"],
+      "createdAt": 1754740800000,
+      "lastActivityAt": 1754740913000
+    },
+    {
+      "sessionId": "s_c410",
+      "name": "infra",
+      "cwd": "/home/you/src/infra",
+      "state": "working",
+      "mode": "acceptEdits",
+      "seq": 3,
+      "pendingRequestIds": [],
+      "createdAt": 1754740860000,
+      "lastActivityAt": 1754740905000
+    }
+  ],
+  "maxSessions": 5
+}

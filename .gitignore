@@ -1,0 +1,21 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+captures/
+.cxx/
+
+# Editors and OS
+.idea/
+.DS_Store
+*.iml
+
+# E2E scratch
+.e2e/

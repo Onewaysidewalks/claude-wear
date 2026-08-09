@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The v1 bridge terminates no TLS of its own: it is a Node process on your LAN or your
+  tailnet, and Tailscale is what provides the encryption and identity a public endpoint
+  would need built. So the watch connects over ws://, to an address you typed, and
+  cleartext has to be permitted.
+
+  This is deliberately broad because a bridge is reached by IP — a LAN 192.168.x, a tailnet
+  100.x, or 10.0.2.2 from the emulator during E2E — and a per-domain allowlist cannot
+  express "the address the user paired with". Narrowing this is what a wss:// bridge would
+  buy; until then the network boundary is doing the work, as the plan's security posture says.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

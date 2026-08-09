@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "server/permission.schema.json",
+  "title": "PermissionEvent",
+  "description": "canUseTool fired for a tool that is not AskUserQuestion. The agent is blocked until a decision or interrupt comes back.",
+  "x-message": { "direction": "server", "type": "permission" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "seq", "requestId", "tool", "input", "display", "suggestions"],
+  "properties": {
+    "type": { "const": "permission" },
+    "sessionId": { "type": "string" },
+    "seq": { "type": "integer" },
+    "requestId": { "type": "string" },
+    "tool": { "type": "string" },
+    "input": { "type": "object", "description": "The tool input verbatim." },
+    "display": {
+      "type": "string",
+      "description": "The actual command or path, never a summary. Approving what you cannot see is the failure mode this product designs against."
+    },
+    "suggestions": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/PermissionSuggestion" }
+    }
+  }
+}

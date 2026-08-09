@@ -1,0 +1,9 @@
+[
+  { "at": 0, "emit": { "type": "assistant", "text": "Ready when you are." } },
+  { "at": 50, "emit": { "type": "result", "subtype": "success", "result": "Your turn." } },
+  { "at": 0, "awaitPrompt": true },
+  { "at": 100, "emit": { "type": "assistant", "text": "On it." } },
+  { "at": 150, "emit": { "type": "result", "subtype": "success", "result": "Done — pushed to the branch." } },
+  { "at": 0, "awaitPrompt": true },
+  { "at": 100, "emit": { "type": "result", "subtype": "success", "result": "Nothing left to do." } }
+]

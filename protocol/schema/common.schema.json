@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "Common",
+  "description": "Shared definitions referenced by the client and server message schemas.",
+  "$defs": {
+    "SessionState": {
+      "title": "SessionState",
+      "description": "Lifecycle of one chat as the watch sees it.",
+      "type": "string",
+      "enum": ["starting", "working", "awaiting", "idle", "closed", "error"]
+    },
+    "PermissionMode": {
+      "title": "PermissionMode",
+      "description": "Agent SDK permission mode. The notification-volume knob: anything auto-approved never reaches canUseTool and so never buzzes the wrist.",
+      "type": "string",
+      "enum": ["default", "acceptEdits", "plan", "bypassPermissions"]
+    },
+    "TurnReason": {
+      "title": "TurnReason",
+      "description": "Why the session's turn state changed.",
+      "type": "string",
+      "enum": ["started", "ask", "permission", "result", "interrupted", "failed"]
+    },
+    "PermissionDecision": {
+      "title": "PermissionDecision",
+      "description": "What the wearer tapped on a permission card.",
+      "type": "string",
+      "enum": ["allow", "allowAlways", "deny"]
+    },
+    "Resolution": {
+      "title": "Resolution",
+      "description": "How a pending request stopped being pending.",
+      "type": "string",
+      "enum": ["answered", "allowed", "denied", "cancelled", "interrupted"]
+    },
+    "ErrorCode": {
+      "title": "ErrorCode",
+      "type": "string",
+      "enum": [
+        "unauthorized",
+        "protocolVersion",
+        "malformed",
+        "unknownSession",
+        "unknownRequest",
+        "alreadyResolved",
+        "maxSessions",
+        "invalidCwd",
+        "runnerFailed",
+        "internal"
+      ]
+    },
+    "DoneSubtype": {
+      "title": "DoneSubtype",
+      "description": "Mirrors the Agent SDK result message subtypes.",
+      "type": "string",
+      "enum": ["success", "error_max_turns", "error_during_execution"]
+    },
+    "AskOption": {
+      "title": "AskOption",
+      "description": "One chip on a question card.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "description"],
+      "properties": {
+        "label": { "type": "string" },
+        "description": { "type": ["string", "null"] }
+      }
+    },
+    "AskQuestion": {
+      "title": "AskQuestion",
+      "description": "One AskUserQuestion question. header is <=12 chars and is made for exactly this screen size.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "header", "options", "multiSelect"],
+      "properties": {
+        "question": { "type": "string" },
+        "header": { "type": "string" },
+        "options": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/AskOption" } },
+        "multiSelect": { "type": "boolean" }
+      }
+    },
+    "PermissionRule": {
+      "title": "PermissionRule",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toolName", "ruleContent"],
+      "properties": {
+        "toolName": { "type": "string" },
+        "ruleContent": { "type": ["string", "null"] }
+      }
+    },
+    "PermissionSuggestion": {
+      "title": "PermissionSuggestion",
+      "description": "An 'always allow' rule the SDK offered. Echoed back verbatim when the wearer taps Always, filtered to destination == localSettings.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "behavior", "destination", "rules"],
+      "properties": {
+        "type": { "type": "string" },
+        "behavior": { "type": ["string", "null"] },
+        "destination": { "type": ["string", "null"] },
+        "rules": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/PermissionRule" } }
+      }
+    },
+    "SessionSummary": {
+      "title": "SessionSummary",
+      "description": "One row of the watch's session list.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "name",
+        "cwd",
+        "state",
+        "mode",
+        "seq",
+        "pendingRequestIds",
+        "createdAt",
+        "lastActivityAt"
+      ],
+      "properties": {
+        "sessionId": { "type": "string" },
+        "name": { "type": "string", "description": "User-set label; defaults to the cwd basename." },
+        "cwd": { "type": "string" },
+        "state": { "$ref": "common.schema.json#/$defs/SessionState" },
+        "mode": { "$ref": "common.schema.json#/$defs/PermissionMode" },
+        "seq": { "type": "integer", "description": "Highest seq emitted for this session so far." },
+        "pendingRequestIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "integer" },
+        "lastActivityAt": { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+[
+  { "at": 0, "emit": { "type": "assistant", "text": "The build directory is stale." } },
+  {
+    "at": 100,
+    "permission": {
+      "tool": "Bash",
+      "input": { "command": "rm -rf build/", "description": "Clean the build directory" },
+      "suggestions": []
+    }
+  },
+  { "at": 0, "expectAnswer": { "behavior": "deny" } },
+  { "at": 100, "emit": { "type": "assistant", "text": "Understood — leaving it alone and listing what I would have removed." } },
+  { "at": 100, "emit": { "type": "result", "subtype": "success", "result": "Listed 41 files under build/." } }
+]

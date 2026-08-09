@@ -1,0 +1,8 @@
+{
+  "type": "error",
+  "sessionId": "s_9f2a",
+  "seq": 14,
+  "code": "alreadyResolved",
+  "message": "that question was already answered",
+  "requestId": "req_31d0"
+}

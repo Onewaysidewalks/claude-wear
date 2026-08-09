@@ -1,0 +1,36 @@
+[
+  { "at": 0, "emit": { "type": "assistant", "text": "Looking at the repo…" } },
+  {
+    "at": 300,
+    "askUserQuestion": {
+      "questions": [
+        {
+          "question": "How should I format the output?",
+          "header": "Format",
+          "options": [
+            { "label": "Summary", "description": "A few sentences" },
+            { "label": "Full report", "description": "Every section, with detail" }
+          ],
+          "multiSelect": false
+        }
+      ]
+    }
+  },
+  { "at": 0, "expectAnswer": true },
+  {
+    "at": 200,
+    "permission": {
+      "tool": "Bash",
+      "input": { "command": "npm test", "description": "Run the test suite" },
+      "suggestions": [
+        {
+          "type": "addRules",
+          "behavior": "allow",
+          "destination": "localSettings",
+          "rules": [{ "toolName": "Bash", "ruleContent": "npm test:*" }]
+        }
+      ]
+    }
+  },
+  { "at": 0, "emit": { "type": "result", "subtype": "success", "result": "Tests pass." } }
+]

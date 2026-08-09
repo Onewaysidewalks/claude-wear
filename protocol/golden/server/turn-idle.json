@@ -1,0 +1,10 @@
+{
+  "type": "turn",
+  "sessionId": "s_9f2a",
+  "seq": 21,
+  "state": "idle",
+  "reason": "result",
+  "requestId": null,
+  "sessionName": "claude-wear",
+  "summary": "Your turn"
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client/prompt.schema.json",
+  "title": "PromptMessage",
+  "description": "Push a follow-up user message into a live session.",
+  "x-message": { "direction": "client", "type": "prompt" },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "sessionId", "text"],
+  "properties": {
+    "type": { "const": "prompt" },
+    "sessionId": { "type": "string" },
+    "text": { "type": "string" }
+  }
+}

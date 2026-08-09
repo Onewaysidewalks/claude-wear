@@ -1,0 +1,10 @@
+{
+  "type": "turn",
+  "sessionId": "s_c410",
+  "seq": 2,
+  "state": "working",
+  "reason": "started",
+  "requestId": null,
+  "sessionName": "infra",
+  "summary": "working"
+}
