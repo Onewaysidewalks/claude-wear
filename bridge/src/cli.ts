@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { AuthStore } from "./auth.js";
-import { ConfigError, parseArgs } from "./config.js";
+import { ConfigError, loadConfig } from "./config.js";
 import { Inbox } from "./inbox.js";
 import { log } from "./log.js";
 import { PROTOCOL_VERSION } from "./protocol.js";
@@ -25,15 +25,29 @@ function version(): string {
 }
 
 async function main(): Promise<void> {
-  const config = parseArgs(process.argv.slice(2));
+  const config = loadConfig(process.argv.slice(2));
 
-  const runner: AgentRunner = config.fake
-    ? new FakeAgentRunner({
-        scenarioDir: config.scenarioDir ?? undefined,
-        rotation: config.scenarios,
-        timeScale: config.timeScale,
-      })
-    : new SdkAgentRunner();
+  if (config.defaultMode === "bypassPermissions" && !config.allowBypassPermissions) {
+    throw new ConfigError(
+      "--permission-mode bypassPermissions needs --allow-bypass-permissions as well. In that mode the agent " +
+        "stops asking, so your watch stops buzzing — it is the most dangerous control in this product and it " +
+        "takes two hands to reach for.",
+    );
+  }
+
+  let runner: AgentRunner;
+  if (config.fake) {
+    runner = new FakeAgentRunner({
+      scenarioDir: config.scenarioDir ?? undefined,
+      rotation: config.scenarios,
+      timeScale: config.timeScale,
+    });
+  } else {
+    const sdk = new SdkAgentRunner({ allowBypassPermissions: config.allowBypassPermissions });
+    // Fail here, at startup, rather than on the first session the watch asks for.
+    await sdk.prepare();
+    runner = sdk;
+  }
 
   const auth = new AuthStore(config.stateDir);
   const inbox = new Inbox(config.inbox);
@@ -53,8 +67,17 @@ async function main(): Promise<void> {
     `  listening   ws://${address}:${port}/ws`,
     `  sessions    up to ${config.maxSessions}${config.allowedRoots.length ? ` under ${config.allowedRoots.join(", ")}` : ""}`,
   ];
+  if (config.configPath) {
+    lines.push(`  config      ${config.configPath}`);
+  }
   if (config.bind === "127.0.0.1") {
     lines.push("  bound to loopback — pass --bind <tailnet-iface> to reach it from your watch");
+  }
+  if (config.allowedRoots.length === 0 && !config.fake) {
+    lines.push("  any existing directory may be opened — set `projectRoots` in config.json to narrow that");
+  }
+  if (config.allowBypassPermissions) {
+    lines.push("  bypassPermissions is PERMITTED — in that mode the agent stops asking and your watch stops buzzing");
   }
   if (config.fake) {
     lines.push("  FAKE AGENT — replaying scenarios, no API key and no network");

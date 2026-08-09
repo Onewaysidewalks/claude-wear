@@ -25,6 +25,7 @@
     "dev": "npm run build && FAKE_AGENT=1 node dist/cli.js"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.226",
     "ws": "^8.18.0"
   },
   "devDependencies": {
