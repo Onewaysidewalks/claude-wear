@@ -40,7 +40,7 @@ Settled up front, because each one shapes the module boundaries below.
 
 | Question | Decision |
 | --- | --- |
-| Watch → bridge transport | **Direct WSS now**, phone-relay companion as a phase-2 module behind the same protocol |
+| Watch → bridge transport | **Direct to the bridge now** over the tailnet (Tailscale is the encrypted transport; the bridge terminates no TLS of its own), phone-relay companion as a phase-2 module behind the same protocol |
 | Turn notification delivery | **WebSocket + foreground service now**, FCM as an opt-in transport later |
 | Bridge hosting | **Self-hosted** — a Node process on a machine you already own |
 | APK signing | **Release keystore from GitHub Secrets**, debug-sign fallback for local/contributor builds |
@@ -189,7 +189,16 @@ methods. We use:
 | Clean shutdown | `q.close()` |
 
 Session ids are persisted to `~/.claude-wear/sessions.json` so a bridge restart resumes
-each chat with `resume: <id>` instead of losing context.
+each chat with `resume: <id>` instead of losing context. Resume is **lazy**: chats are not
+re-spawned at boot (N sessions is N subprocesses and N token spends), they continue when
+you open that directory again. Most recent wins, one resume point per directory, and a
+directory a live session already holds is not resumable — two `query()` calls resuming one
+agent session id would write over each other's transcript. A transcript that has gone means
+a fresh start with a line saying so, not a chat that can never be talked to.
+
+`bypassPermissions` needs `--allow-bypass-permissions` on the bridge as well as the
+watch asking for it: the SDK requires an explicit opt-in, and so does the most dangerous
+control in this product.
 
 ### Turn detection — the core of the product
 
@@ -552,7 +561,12 @@ protocol field mean the bridge doesn't have to be rewritten to get there.
 Neither of these blocks M0 — the scaffold and the fake-agent E2E loop don't depend on
 either answer.
 
-1. **Which project roots** should the bridge expose? It's the cheapest real limit on blast
-   radius, and it wants to be a config file rather than a code change. Needed by M1.
+1. ~~**Which project roots** should the bridge expose?~~ **Answered in M1.**
+   `~/.claude-wear/config.json` carries `projectRoots` (plus `port`, `bind`, `maxSessions`,
+   `permissionMode`, `allowBypassPermissions`); flags win over the file, key by key. The
+   shipped default is unchanged and permissive — no roots configured means any existing
+   directory, and the bridge says so at startup — so the file is an opt-in tightening
+   rather than a required setup step. An unknown key in it is an error, because a mistyped
+   `projectRoot` that silently opens your whole home directory is the failure this is for.
 2. Confirm the target device/OS level so `minSdk` and the emulator image are pinned to
    what you actually wear. Needed by M2.

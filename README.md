@@ -13,15 +13,16 @@ wear/       Android Gradle project. :app (Wear OS) + :protocol
 scripts/    e2e.sh
 ```
 
-## Status: M0
+## Status: M1
 
-The scaffold. Protocol, codegen, the bridge with a fake agent, a stub watch UI, and the
-E2E loop that ties them together.
+The bridge runs real Claude sessions, and `claude-wear-cli` drives them from a terminal —
+same wire protocol as the watch, so no emulator is needed to exercise AskUserQuestion and
+permission flows. The watch app is still M0's stub.
 
 | | |
 | --- | --- |
-| **M0** | Monorepo, protocol schema + codegen, `FakeAgentRunner`, CI green — **this** |
-| M1 | The bridge on the real Agent SDK; pairing/tokens; a CLI for driving it |
+| M0 | Monorepo, protocol schema + codegen, `FakeAgentRunner`, CI green |
+| **M1** | The bridge on the real Agent SDK; pairing/tokens; a CLI for driving it — **this** |
 | M2 | Watch: pairing, session list, chat, connection service, vibrate on turn |
 | M3 | AskUserQuestion card + permission card + voice reply |
 | M4 | Release pipeline: signed APK to Releases |
@@ -35,6 +36,7 @@ Nothing here needs an API key, a secret, a container registry or network access.
 make install      # bridge dependencies
 make bridge       # lint, typecheck, test
 make dev          # a fully interactive bridge with a fake agent
+make cli          # drive a running bridge from a terminal
 make e2e          # fake bridge + Wear emulator + the real app
 make ci           # everything CI runs except the emulator job
 ```
@@ -43,8 +45,16 @@ make ci           # everything CI runs except the emulator job
 scenarios (`bridge/test/scenarios/`) whose blocking behaviour is the real thing: an
 `askUserQuestion` step parks until you answer, exactly as `canUseTool` parks the agent.
 
-Real Claude sessions arrive in M1 — `bridge/src/runner/sdk.ts` is a stub, and starting the
-bridge without `--fake` says so.
+For a real Claude session, drop `--fake` and pair a terminal client with it:
+
+```sh
+npx claude-wear-bridge                       # prints an 8-digit pairing code
+npx claude-wear-cli --pair <code> --new ~/code/thing
+```
+
+`ANTHROPIC_API_KEY` comes from the environment exactly as it does for the Claude Code CLI.
+Which directories a chat may open is `projectRoots` in `~/.claude-wear/config.json`; see
+[`bridge/README.md`](bridge/README.md).
 
 ## The protocol
 
@@ -69,5 +79,7 @@ runner). `release.yml` is M4.
 
 The bridge runs arbitrary shell commands as you, on the machine holding your code. It binds
 `127.0.0.1` by default, widening it is an explicit flag, a tailnet is the recommended
-boundary, and `--project-root` is the cheapest real limit on blast radius. See the plan's
+boundary, and `projectRoots` in `~/.claude-wear/config.json` is the cheapest real limit on
+blast radius. `bypassPermissions` — where the agent stops asking and your watch stops
+buzzing — additionally needs `--allow-bypass-permissions` on the bridge. See the plan's
 *Security posture* for the rest.
