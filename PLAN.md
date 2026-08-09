@@ -42,45 +42,52 @@ Settled up front, because each one shapes the module boundaries below.
 | --- | --- |
 | Watch → bridge transport | **Direct WSS now**, phone-relay companion as a phase-2 module behind the same protocol |
 | Turn notification delivery | **WebSocket + foreground service now**, FCM as an opt-in transport later |
-| Bridge hosting | **Deployed cloud service** (container, public HTTPS hostname) |
+| Bridge hosting | **Self-hosted** — a Node process on a machine you already own |
 | APK signing | **Release keystore from GitHub Secrets**, debug-sign fallback for local/contributor builds |
 
-The two "…later" answers are the reason `NotificationTransport` and `ClientTransport`
-exist as interfaces from day one. Adding FCM or a phone relay afterwards should be a new
-implementation of an existing seam, never a rewrite of the UI or the protocol.
+The three "…later" answers are the reason `NotificationTransport`, `ClientTransport`, and
+`AgentRunner` exist as interfaces from day one. Adding FCM, a phone relay, or a hosted
+deployment afterwards should be a new implementation of an existing seam, never a rewrite
+of the UI or the protocol.
+
+Self-hosting is doing a lot of work to keep v1 small. It means **no workspace
+provisioning** (`cwd` is a directory that already exists), **no container/volume story**
+(the Agent SDK writes transcripts to `~/.claude` as it already does), **no public
+endpoint** (and so no rate limiting, no TLS termination, no brute-force surface), and
+**no deploy pipeline**. Each of those is a subsystem that a hosted bridge would need
+before the watch could buzz once. See *Later: hosting* for what changes if this moves.
 
 ## Assumptions (flag these if wrong)
 
 - **"Galaxy 9"** is read as a current Samsung Galaxy Watch running **Wear OS 5**.
   Target `compileSdk`/`targetSdk` 34, `minSdk` 30 (Wear OS 3+). If you meant a specific
   device with a different OS level, only the Gradle config changes.
-- The bridge is **single-tenant** — deployed by you, for you. Device-scoped tokens let you
-  pair several watches, but there are no user accounts, orgs, or per-user isolation. If
-  this ever serves other people, the auth model needs to be rebuilt, not extended.
-- **Workspace provisioning is the biggest unresolved design question** — see
-  *Open questions*. The plan assumes git-clone-per-session as the default because it's
-  the only option that works on ephemeral container storage, but this needs your call
-  before M1.
+- The bridge runs on a machine that has your code and is **on when you want to use it** —
+  laptop, homelab box, dev container. Reachable from the watch over LAN/Wi-Fi at home, and
+  over a **Tailscale/WireGuard tailnet** when you're out. Not exposed to the public
+  internet.
+- The bridge is **single-user**. Device-scoped tokens let you pair more than one watch,
+  but there are no accounts or isolation between them.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────┐                                  ┌─────────────────────────────────┐
-│  Wear OS app │  WSS + Bearer token, over the    │  bridge container (cloud)       │
-│  (Kotlin,    │ ═══ public internet ═══════════► │                                 │
-│   Compose)   │ ◄══════════════════════════════  │  SessionRegistry                │
-└──────────────┘   turn / ask / permission / text │   ├─ Session A ─ query()        │
-       │                                          │   ├─ Session B ─ query()        │
-       ├─ Vibrator + ongoing notification         │   └─ Session C ─ query()        │
-       ├─ RemoteInput (voice from shade)          │                                 │
-       ├─ RecognizerIntent (voice in app)         │  @anthropic-ai/claude-agent-sdk │
-       │                                          │  ANTHROPIC_API_KEY (server-side)│
-       ├─ ClientTransport ─────┐                  │                                 │
-       │   └─ (phase 2) phone  │                  │  /workspaces  ← persistent vol  │
-       └─ NotificationTransport│                  │  /sessions    ← transcripts     │
-           └─ (phase 2) FCM ───┘                  └─────────────────────────────────┘
+┌──────────────┐   WebSocket (JSON, token auth)   ┌───────────────────────────────┐
+│  Wear OS app │  ── LAN / Wi-Fi / tailnet ─────► │  bridge  (Node 22, TS)        │
+│  (Kotlin,    │ ◄─────────────────────────────── │  on your laptop / homelab box │
+│   Compose)   │   turn / ask / permission / text │                               │
+└──────────────┘                                  │  SessionRegistry              │
+       │                                          │   ├─ Session A ─ query()      │
+       ├─ Vibrator + ongoing notification         │   ├─ Session B ─ query()      │
+       ├─ RemoteInput (voice from shade)          │   └─ Session C ─ query()      │
+       ├─ RecognizerIntent (voice in app)         │                               │
+       │                                          │  @anthropic-ai/claude-agent-  │
+       ├─ ClientTransport ─────┐                  │   sdk  → your real repos      │
+       │   └─ (later) phone    │                  │  ~/.claude  ← transcripts     │
+       └─ NotificationTransport│                  │             (already there)   │
+           └─ (later) FCM ─────┘                  └───────────────────────────────┘
 ```
 
 ### Why a bridge, not "the SDK on the watch"
@@ -89,9 +96,13 @@ The Agent SDK ships for Node and Python only, and needs a filesystem and shell t
 useful. Even if it ran on-device, the watch isn't where your code lives. The bridge is
 where the agent actually works; the watch is a notification-and-decision surface.
 
-### Two seams that exist purely for phase 2
+Running it on the machine that already holds your checkouts is what makes v1 small: the
+agent's `cwd` is a path you type, transcripts land in `~/.claude` exactly as they do for
+the CLI, and `resume` works across bridge restarts with no volume to provision.
 
-Both "later" answers get an interface now, so the follow-on work never touches the UI:
+### Two seams that exist purely for later
+
+Both deferred transports get an interface now, so the follow-on work never touches the UI:
 
 ```kotlin
 // wear/app/.../transport/ClientTransport.kt
@@ -126,19 +137,14 @@ claude-wear/
 │   │   │   ├── sdk.ts          # real: query() from the Agent SDK
 │   │   │   └── fake.ts         # scripted fixtures, no API key
 │   │   ├── turn.ts             # "is it the user's turn?" derivation
-│   │   ├── auth.ts             # device tokens, pairing, rate limiting
-│   │   ├── workspace.ts        # provisioning: clone/refresh a repo per session
+│   │   ├── auth.ts             # device tokens + pairing
 │   │   └── protocol.ts         # generated from protocol/schema
 │   └── test/
-├── deploy/
-│   ├── Dockerfile              # the one image: runs locally AND in prod
-│   ├── compose.yaml            # local: bridge + fake agent, hermetic
-│   └── fly.toml                # (or render.yaml) — platform config
 ├── wear/                       # Android Gradle project
 │   ├── app/                    # :app  — Wear OS, Compose for Wear OS
 │   └── protocol/               # :protocol — kotlinx.serialization models
 ├── scripts/e2e.sh
-└── .github/workflows/{ci.yml,release.yml,deploy.yml}
+└── .github/workflows/{ci.yml,release.yml}
 ```
 
 `protocol/` exists so the two languages can't drift silently. Schemas generate TS types
@@ -268,40 +274,26 @@ watch doesn't need token-by-token deltas, and it's a meaningful battery saving.
 
 ---
 
-## Deployment
+## Running the bridge
 
-One image, two run modes. `deploy/Dockerfile` is what runs in production *and* what
-`compose.yaml` runs locally with `FAKE_AGENT=1` — so "works on my machine" and "works in
-prod" are the same artifact with different env. This is what keeps the hermetic local
-test path honest now that the bridge is a deployed service.
+```sh
+npx claude-wear-bridge --port 8787 --bind tailscale0
+```
 
-**Platform: Fly.io** (Render/Railway are drop-in alternatives). It's picked for three
-properties this workload actually needs:
+That's the whole deployment story. `ANTHROPIC_API_KEY` comes from the environment exactly
+as it does for the CLI. Workspaces are directories that already exist — `newSession` takes
+a `cwd` path, and the watch picks from a configured list of project roots rather than
+cloning anything.
 
-- **Persistent volumes.** Agent SDK transcripts live at `~/.claude/projects/<cwd>/*.jsonl`
-  and session `resume` needs the file to still exist. On ephemeral storage every redeploy
-  silently loses conversation history. Volume mounted at `/sessions`, with
-  `CLAUDE_CONFIG_DIR` pointed at it.
-- **WebSockets without idle timeouts.** A session parked on `canUseTool` while the watch
-  is in your pocket may hold a connection open for a long time. Platforms that kill idle
-  connections at 60s break the core interaction.
-- **Scale-to-zero is a non-goal.** A cold start mid-session drops pending permission
-  requests. The bridge runs `min_machines_running = 1`.
+**Binding.** Defaults to `127.0.0.1`. Widening it is an explicit flag, and the plan
+recommends binding to a **tailnet interface** rather than `0.0.0.0` — that gets you
+away-from-home access without a port open to your LAN, let alone the internet, and
+Tailscale handles the TLS and identity that a public bridge would need built.
 
-**Workspace provisioning** (`workspace.ts`). The agent needs code to work on. On a cloud
-container, the default is **git-clone-per-session**: `newSession` takes a repo URL + ref,
-the bridge clones into `/workspaces/<sessionId>`, and passes that as `cwd` to `query()`.
-A fine-grained GitHub PAT lives in deploy secrets. Clones are cached by repo and refreshed
-with `git fetch` rather than re-cloned. Volume-mount and bring-your-own-checkout remain
-possible — see *Open questions*, this needs your call.
-
-**Secrets** (platform secret store, never in the image): `ANTHROPIC_API_KEY`,
-`GITHUB_TOKEN`, `PAIRING_ADMIN_KEY`. The watch never sees any of these — it holds only its
-own device token.
-
-**`deploy.yml`** — on push to `master`, after CI passes: build the image, push, deploy,
-health-check `/healthz`, roll back on failure. Runs in parallel with the APK release so a
-merge ships both halves of the matched pair.
+**Persistence.** None to design. Agent SDK transcripts already land in
+`~/.claude/projects/<encoded-cwd>/*.jsonl`; the bridge keeps a small
+`~/.claude-wear/sessions.json` mapping its chats to those session ids so a restart resumes
+with `resume: <id>`.
 
 ---
 
@@ -359,16 +351,10 @@ export interface AgentRunner {
 ]
 ```
 
-`docker compose -f deploy/compose.yaml up` gives a fully interactive bridge with **no API
-key, no network, and no cloud account** — the same image that runs in production, with
-`FAKE_AGENT=1`. Every scenario the watch must handle, including ones awkward to provoke
-for real (a 4-question multiSelect AUQ, a denied `rm -rf`, a mid-request disconnect), is
-a fixture.
-
-Deploying to a cloud service is the decision most likely to erode "completely testable
-locally," so it's worth being explicit: **no test in CI touches the deployed bridge.**
-The local compose stack is the test target, and `deploy.yml` runs strictly after the
-suite passes.
+`FAKE_AGENT=1 npm run dev` gives a fully interactive bridge with **no API key and no
+network**. Every scenario the watch must handle, including ones awkward to provoke for
+real (a 4-question multiSelect AUQ, a denied `rm -rf`, a mid-request disconnect), is a
+fixture. Nothing in CI needs a secret, a container registry, or a running deployment.
 
 ### Test layers
 
@@ -421,35 +407,31 @@ host at `10.0.2.2`.
 
 ## Security posture
 
-A publicly reachable bridge is a materially different threat model from a LAN box, and
-it's the part of these decisions with the most consequence. **This endpoint can run
-arbitrary shell commands and holds your Anthropic API key and a GitHub token.** Treat it
-as production infrastructure, not a dev convenience.
+Staying off the public internet removes most of the attack surface, but not the
+consequences of a bad decision: **the bridge runs arbitrary shell commands as you, on the
+machine holding your code.** The network boundary is doing the heavy lifting, so it should
+be a deliberate one.
 
-**Authentication**
+**Network**
 
-- TLS terminated at the platform edge; the bridge rejects non-TLS upgrades outright.
-- Device-scoped bearer tokens: 256-bit random, stored **hashed** (Argon2id), presented on
-  the WS upgrade and revocable individually. Losing a watch revokes one token.
-- Pairing: `POST /pair` with an 8-digit code, single-use, 5-minute TTL, generated only by
-  an operator call carrying `PAIRING_ADMIN_KEY`. A public endpoint means codes can't be
-  freely mintable — this is the difference between an 8-digit code being fine and being a
-  10-minute brute force.
-- Rate limits on `/pair` (strict, per-IP) and on session creation. Failed-auth attempts
-  are logged and alert on a burst.
+- Binds `127.0.0.1` by default. Widening is an explicit flag, and a tailnet interface is
+  the recommended target — the tailnet is the auth boundary, and it's a much better one
+  than anything hand-rolled here.
+- Device-scoped bearer tokens: 256-bit random, stored hashed, presented on the WS upgrade,
+  revocable individually. Losing a watch revokes one token.
+- Pairing: an 8-digit code printed by the bridge, single-use, 5-minute TTL. Adequate
+  because the endpoint isn't publicly reachable; on a public bridge the same code would be
+  a short brute force, which is one of the things that gets rebuilt if hosting moves.
 
 **Blast radius**
 
-- `permissionMode` stays `default`. **`bypassPermissions` is not exposed to the watch at
-  all** — on a LAN box that's a convenience toggle; on an internet-facing container that
-  runs your repos it's a remote-code-execution switch behind a phone screen. Raising to
-  `acceptEdits` is available; going further requires a redeploy.
-- The container runs non-root with a read-only root filesystem apart from `/workspaces`
-  and `/sessions`. No Docker socket, no host mounts.
-- The GitHub PAT is fine-grained and scoped to the repos you actually want the agent
-  touching. It is the practical limit on what a compromised session can reach.
-- Egress is unrestricted by default (the agent needs npm, PyPI, the web). If that's not
-  acceptable, an allowlisted egress proxy is the lever — flagged, not assumed.
+- `permissionMode` defaults to `default` — never `bypassPermissions`. The watch can raise
+  it per session, and the UI says plainly that raising it means fewer wrist buzzes and
+  less oversight. Worth stating directly: a wrist-tap "always allow" on a box with your
+  repos and shell is the most dangerous control in this product, and it should read that
+  way on screen.
+- Point the bridge at specific project roots rather than `$HOME`. It's a one-line config
+  and it's the cheapest real limit available.
 
 **On the watch**
 
@@ -465,18 +447,17 @@ as production infrastructure, not a dev convenience.
 
 | # | Deliverable | Done when |
 | --- | --- | --- |
-| M0 | Scaffold: monorepo, protocol schema + codegen, `FakeAgentRunner`, Dockerfile + compose, CI green | `make e2e` passes against the local container with a stub UI |
-| M1 | Bridge on the real Agent SDK; workspace provisioning; `bridge-cli` for terminal-driving it | Real Claude session driven end-to-end from the CLI |
-| M2 | Auth: device tokens, pairing, rate limits. First cloud deploy behind TLS | Watch pairs against the deployed bridge over WSS |
-| M3 | Wear app: session list, chat, connection service, vibrate on turn (`ClientTransport` + `NotificationTransport` seams in place) | Watch buzzes on a real `result` |
-| M4 | AUQ card + permission card + voice reply (in-app and from the shade) | Full scripted E2E green on emulator |
-| M5 | Release pipeline: signed APK to Releases, image deploy, matched pair | A merge to `master` ships both halves |
-| M6 | Hardening: reconnect/replay, battery pass, multi-session stress, egress review | — |
-| P2 | Phone-relay `ClientTransport` and FCM `NotificationTransport` | Battery data from M6 says whether both are needed or just one |
+| M0 | Scaffold: monorepo, protocol schema + codegen, `FakeAgentRunner`, CI green | `make e2e` passes with a stub UI |
+| M1 | Bridge on the real Agent SDK; pairing/tokens; `bridge-cli` for terminal-driving it | Real Claude session driven end-to-end from the CLI |
+| M2 | Wear app: pairing, session list, chat, connection service, vibrate on turn (`ClientTransport` + `NotificationTransport` seams in place) | Watch buzzes on a real `result` |
+| M3 | AUQ card + permission card + voice reply (in-app and from the shade) | Full scripted E2E green on emulator |
+| M4 | Release pipeline: signed APK to Releases + matched bridge tarball | A merge to `master` produces an installable APK |
+| M5 | Hardening: reconnect/replay, battery pass, multi-session stress, tailnet access from outside the house | — |
+| L | Phone-relay `ClientTransport`, FCM `NotificationTransport`, hosted bridge | Battery data from M5 says which of these is actually needed |
 
 ---
 
-## Phase 2 (seamed, not built)
+## Later (seamed, not built)
 
 - **FCM `NotificationTransport`.** Lets the watch sleep instead of holding a socket. Needs
   a Firebase project and `google-services.json`, and can't be exercised hermetically — so
@@ -486,11 +467,33 @@ as production infrastructure, not a dev convenience.
   battery and off-Wi-Fi reliability, at the cost of a second Android module. Same
   interface, no UI changes.
 
+### Later: hosting
+
+Self-hosting is a v1 scope decision, not a permanent one. If the bridge ever moves to a
+hosted service, these are the pieces that get built then rather than now — worth listing
+so the deferral is legible, and so nothing in v1 forecloses it:
+
+- **Workspace provisioning.** Some way for the agent to get your code: clone-per-session
+  with a scoped PAT, or a managed volume of checkouts. Today `cwd` is just a path.
+- **Persistence.** A volume for `~/.claude` transcripts, or a `SessionStore` adapter —
+  otherwise `resume` breaks on every redeploy.
+- **Real auth.** Rate-limited, operator-gated pairing rather than a printed code; TLS
+  termination; per-device revocation under adversarial conditions rather than friendly
+  ones.
+- **Platform constraints.** Persistent volumes, no WebSocket idle timeout, no
+  scale-to-zero (a cold start mid-session drops pending `canUseTool` requests). That rules
+  out most serverless platforms.
+- **A tighter permission story.** `acceptEdits` on your own laptop and `acceptEdits` on an
+  internet-facing box that clones your repos are not the same risk.
+
+None of this is load-bearing for v1, and the `AgentRunner` seam plus a `cwd`-per-session
+protocol field mean the bridge doesn't have to be rewritten to get there.
+
 ## Deferred (no seam yet)
 
 - **The `defer` hook decision.** The SDK can defer a pending tool call so the process can
-  exit and resume from the persisted session later. Not needed while the bridge is a
-  container with `min_machines_running = 1`; becomes relevant if it ever scales to zero.
+  exit and resume from the persisted session later. That's the right answer for a laptop
+  that sleeps — see *Open questions*, it may be a v1 item after all.
 - **Streaming assistant text**, subagent progress, context-usage display.
 - **Multi-user.** Device tokens let you pair several watches to *your* bridge. Real
   accounts would mean rebuilding auth, not extending it.
@@ -499,17 +502,12 @@ as production infrastructure, not a dev convenience.
 
 ## Open questions
 
-1. **How does the agent get your code?** The one that blocks M1. Three options:
-   *(a)* git-clone-per-session with a fine-grained PAT — the plan's default, works on
-   ephemeral storage, but every session starts cold and the agent can only touch repos
-   the PAT allows; *(b)* a long-lived persistent volume holding checkouts you manage —
-   warm and fast, but you're maintaining state on a box you don't shell into often;
-   *(c)* the agent works only on repos it clones fresh per task, no persistence at all.
-   This shapes `workspace.ts`, the volume layout, and the PAT scope.
-2. **Which cloud platform**, if not Fly? The three requirements are persistent volumes,
-   no WebSocket idle timeout, and no scale-to-zero. Render and Railway qualify; most
-   serverless/edge platforms do not.
-3. **Is unrestricted egress acceptable** from the container? The agent wants npm, PyPI,
-   and the web; locking it down means an allowlisted proxy and some broken tool calls.
-4. Confirm the target device/OS level so `minSdk` and the emulator image are pinned to
+1. **Does the host machine sleep?** The one that actually matters now. The whole design
+   assumes the bridge is up whenever you might glance at your wrist. If it's a laptop
+   that closes, a pending `canUseTool` dies with the process — which promotes the `defer`
+   hook from *Deferred* to a v1 requirement, and makes an always-on box (Pi, NAS, desktop)
+   the better host.
+2. **Which project roots** should the bridge expose? It's the cheapest real limit on blast
+   radius, and it wants to be a config file rather than a code change.
+3. Confirm the target device/OS level so `minSdk` and the emulator image are pinned to
    what you actually wear.
