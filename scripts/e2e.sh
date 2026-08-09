@@ -144,8 +144,17 @@ pull_shots() {
   [[ -n "$names" ]] || return 1
   while IFS= read -r name; do
     # exec-out rather than shell: no pty means no CRLF translation to corrupt a PNG.
-    adb exec-out run-as "$APP_ID" cat "$DEVICE_SHOT_DIR/$name" >"$SHOT_DIR/$name"
+    # </dev/null matters: adb forwards its stdin to the device, and without this it eats
+    # the rest of the here-string below, so the loop pulls exactly one file and stops.
+    adb exec-out run-as "$APP_ID" cat "$DEVICE_SHOT_DIR/$name" >"$SHOT_DIR/$name" </dev/null
   done <<<"$names"
+
+  # The count is the check. Both ways this has gone wrong so far — a swallowed listing and a
+  # swallowed loop — looked like success and produced a near-empty gallery.
+  local wanted found
+  wanted="$(wc -l <<<"$names" | tr -d '[:space:]')"
+  found="$(find "$SHOT_DIR" -name '*.png' | wc -l | tr -d '[:space:]')"
+  [[ "$found" -eq "$wanted" ]] || warn "the device had $wanted screenshots but only $found came back"
 }
 
 if pull_shots; then
