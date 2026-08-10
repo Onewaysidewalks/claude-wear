@@ -257,6 +257,13 @@ Two extras the watch supports, both already in the protocol:
 - **Dismiss and just talk** — set the top-level `response` field instead of `answers`,
   and Claude receives "The user responded: …". Mapped to a "Say something else" action.
 
+From the **notification shade** the answer is narrower on purpose, settled in M3: the card
+offers the first question's option labels as `RemoteInput` choices, and a reply that is one
+of those labels — on a single-question AUQ — is sent as an `answers` entry for that
+question. Anything else, and anything at all on a multi-question AUQ, goes in as
+`response`. Guessing which of four questions a dictated sentence answers cannot be done
+from a notification, and answering the wrong one is worse than handing Claude the sentence.
+
 ### Permission decisions
 
 `{ behavior: "allow", updatedInput: input }` or
@@ -359,8 +366,8 @@ Kotlin, **Compose for Wear OS**, single `:app` module + `:protocol`.
 | **Pair** | Digit entry for the 8-digit code the bridge prints; exchanges it for a long-lived token stored in `EncryptedSharedPreferences`. |
 | **Sessions** | `ScalingLazyColumn` of chats. Badge states: *awaiting you* (accent), *working* (spinner), *idle*. Sorted awaiting-first. |
 | **Chat** | Condensed transcript, mic FAB, interrupt button, overflow → permission mode. |
-| **Question** | One card per AUQ question. `header` as the title (≤12 chars, made for exactly this). Chips for options, toggles + confirm when `multiSelect`. Trailing "Other…" chip → dictation. |
-| **Permission** | Tool name + the actual command/path, then Allow / Always / Deny. Deny opens reason chips + dictation. |
+| **Question** | One section per AUQ question. `header` as the title (≤12 chars, made for exactly this). Chips for options, toggles + confirm when `multiSelect`, and a one-question single-select card answers on the tap. Trailing "Something else…" chip → dictation. |
+| **Permission** | Tool name + the actual command/path, then Allow / Always / Deny. "Always" appears only when the bridge sent a `localSettings` rule, and names it. Deny opens reason chips + dictation. |
 
 **Connectivity.** A foreground `ConnectionService` holds the WebSocket and posts an
 [Ongoing Activity](https://developer.android.com/training/wearables/ongoing-activity) so
@@ -507,7 +514,7 @@ be a deliberate one.
 | M0 | Scaffold: monorepo, protocol schema + codegen, `FakeAgentRunner`, CI green | `make e2e` passes with a stub UI |
 | M1 | Bridge on the real Agent SDK; pairing/tokens; `bridge-cli` for terminal-driving it | Real Claude session driven end-to-end from the CLI |
 | M2 | Wear app: pairing, session list, chat, connection service, vibrate on turn (`ClientTransport` + `NotificationTransport` seams in place). Reconnect-with-backoff came here too, because a foreground service that gives up on the first dropped Wi-Fi is worse than no service | Watch buzzes on a real `result` |
-| M3 | AUQ card + permission card + voice reply (in-app and from the shade) | Full scripted E2E green on emulator |
+| M3 | AUQ card + permission card + voice reply (in-app and from the shade), grouped per-session notifications carrying the `requestId` | Full scripted E2E green on emulator |
 | M4 | Release pipeline: signed APK to Releases + matched bridge tarball | A merge to `main` produces an installable APK |
 | M5 | Hardening: battery pass, multi-session stress, reconnect under real radio conditions, tailnet access from outside the house | — |
 | L | Phone-relay `ClientTransport`, FCM `NotificationTransport`, hosted bridge | Battery data from M5 says which of these is actually needed |
@@ -571,7 +578,7 @@ either answer.
    rather than a required setup step. An unknown key in it is an error, because a mistyped
    `projectRoot` that silently opens your whole home directory is the failure this is for.
 2. Confirm the target device/OS level so `minSdk` and the emulator image are pinned to
-   what you actually wear. **Still open after M2**, which shipped on the assumed target —
+   what you actually wear. **Still open after M3**, which shipped on the assumed target —
    `minSdk` 30, `compileSdk`/`targetSdk` 34, a Wear OS 5 Galaxy Watch — because nothing in
    the app needed a decision the assumption could not carry. What it costs to be wrong is
    still one line of `libs.versions.toml` and the emulator image in `scripts/e2e.sh`; what

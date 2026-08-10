@@ -13,22 +13,24 @@ wear/       Android Gradle project. :app (Wear OS) + :protocol
 scripts/    e2e.sh
 ```
 
-## Status: M2
+## Status: M3
 
-There is a watch app. Pair it with a code, see which chats need you, open one, say
-something, stop a runaway agent, change what it asks you first. A foreground service holds
-the socket, so a chat that blocked on you twenty minutes ago can still buzz your wrist.
+You can now answer from your wrist. A question arrives as a card with Claude's own options
+as chips; a permission arrives as a card showing the actual command, with Allow, an "always
+allow" that names the rule it would write, and a Deny that carries a reason Claude can read.
+Both can be answered from the notification shade without opening the app — one card per
+chat, so three chats waiting on you are three cards rather than one that overwrote the other
+two, and every reply names the exact request it answers.
 
-Questions and permissions arrive as transcript lines rather than cards, which is
-deliberate: a permission card that summarises instead of showing you the actual command is
-worse than no card. Answering from the wrist is M3.
+Dictation is the way in: the platform recognizer in the app, `RemoteInput` in the shade.
+The keyboard is still there as the fallback it always was.
 
 | | |
 | --- | --- |
 | M0 | Monorepo, protocol schema + codegen, `FakeAgentRunner`, CI green |
 | M1 | The bridge on the real Agent SDK; pairing/tokens; a CLI for driving it |
-| **M2** | Watch: pairing, session list, chat, connection service, vibrate on turn — **this** |
-| M3 | AskUserQuestion card + permission card + voice reply |
+| M2 | Watch: pairing, session list, chat, connection service, vibrate on turn |
+| **M3** | AskUserQuestion card + permission card + voice reply, in-app and from the shade — **this** |
 | M4 | Release pipeline: signed APK to Releases |
 | M5 | Hardening: battery pass, multi-session stress, tailnet access |
 
@@ -77,8 +79,9 @@ make contract         # the golden fixtures, both sides
 ## What the screens look like
 
 `wear/app/src/test/screenshots/` holds a PNG of every screen state that matters — the list
-with a chat waiting on you, a refused pairing code, the mode screen with `bypassPermissions`
-selected. They are committed, and CI fails if a screen stops matching one.
+with a chat waiting on you, a refused pairing code, a question card with its options, a
+permission card showing the command it wants to run. They are committed, and CI fails if a
+screen stops matching one.
 
 ```sh
 make screenshots        # re-record after an intended change, then look at the diff
@@ -98,7 +101,10 @@ copy — not about what a physical Galaxy Watch renders. That is what the emulat
 
 Four jobs on every PR and on `main`: `bridge`, `android` (unit tests, screenshots, lint,
 APK), `contract` (regenerate, fail if the tree is dirty, then golden tests both sides) and
-`e2e` (a Wear emulator on a hosted runner). `release.yml` is M4.
+`e2e` (a Wear emulator on a hosted runner). The e2e run drives the whole loop against the
+`auq-then-bash` scenario — which parks until each decision comes back, so reaching the end
+of it is proof the answers were understood — and then asserts against what the bridge
+actually received. `release.yml` is M4.
 
 ## Security posture in one line
 

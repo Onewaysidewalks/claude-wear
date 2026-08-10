@@ -1,6 +1,7 @@
 package dev.claudewear.wear.ui
 
 import android.util.Log
+import dev.claudewear.protocol.AnswerMessage
 import dev.claudewear.protocol.AskEvent
 import dev.claudewear.protocol.ClientMessage
 import dev.claudewear.protocol.DoneEvent
@@ -9,6 +10,8 @@ import dev.claudewear.protocol.HelloMessage
 import dev.claudewear.protocol.InterruptMessage
 import dev.claudewear.protocol.NewSessionMessage
 import dev.claudewear.protocol.PROTOCOL_VERSION
+import dev.claudewear.protocol.PermissionDecision
+import dev.claudewear.protocol.PermissionDecisionMessage
 import dev.claudewear.protocol.PermissionEvent
 import dev.claudewear.protocol.PermissionMode
 import dev.claudewear.protocol.PromptMessage
@@ -45,10 +48,6 @@ private const val TRANSCRIPT_LIMIT = 50
  * Depends on the two transport interfaces and never on OkHttp or a notification manager,
  * so the whole state machine is testable with no device. [ConnectionService] owns the
  * instance; the screens only observe [state] and call the send methods.
- *
- * M3 turns the waiting lines into question and permission cards. A half-built permission
- * card that does not show the actual command is worse than a transcript line, because
- * approving what you cannot see is the failure this product designs against.
  */
 class SessionsClient(
     private val transport: ClientTransport,
@@ -143,6 +142,35 @@ class SessionsClient(
         send(PromptMessage(sessionId = sessionId, text = text))
     }
 
+    /**
+     * Answer an AskUserQuestion by picking options: question text -> the chosen label, with a
+     * multiSelect question's labels joined. Dictated free text goes in as the value, exactly
+     * as Claude Desktop's "Other" does — Claude gets the answer, not the word "Other".
+     */
+    fun answer(sessionId: String, requestId: String, answers: Map<String, String>) =
+        send(AnswerMessage(sessionId = sessionId, requestId = requestId, answers = answers, response = null))
+
+    /**
+     * Dismiss the questions and just talk. Claude receives "The user responded: …", which is
+     * the escape hatch for a question whose options are all wrong.
+     */
+    fun respond(sessionId: String, requestId: String, response: String) =
+        send(AnswerMessage(sessionId = sessionId, requestId = requestId, answers = null, response = response))
+
+    /**
+     * Allow, allow-always or deny a tool call. A deny [message] is visible to Claude, so the
+     * agent adapts rather than retrying blindly — which is why the card offers reasons.
+     */
+    fun decide(sessionId: String, requestId: String, decision: PermissionDecision, message: String? = null) =
+        send(
+            PermissionDecisionMessage(
+                sessionId = sessionId,
+                requestId = requestId,
+                decision = decision,
+                message = message,
+            ),
+        )
+
     fun interrupt(sessionId: String) = send(InterruptMessage(sessionId = sessionId))
 
     fun setMode(sessionId: String, mode: PermissionMode) = send(SetModeMessage(sessionId = sessionId, mode = mode))
@@ -161,6 +189,9 @@ class SessionsClient(
         // Side effects before the state edit, never inside it: `update` re-runs its lambda
         // when it loses a race, and a second buzz for one turn is a bug you cannot unsee.
         if (event is TurnEvent) notifications.onTurn(event)
+        // The card may have been answered from the CLI, the phone, or another watch; a
+        // notification for a decision that has already been made is worse than none.
+        if (event is ResolvedEvent) notifications.onResolved(event.sessionId, event.requestId)
         if (event is SessionsEvent) resyncing = false
 
         _state.update { current ->
@@ -177,6 +208,7 @@ class SessionsClient(
                         error = null,
                         // A closed chat keeps nothing on the wrist.
                         transcripts = current.transcripts.filterKeys { it in known },
+                        pending = current.pending.filterValues { it.sessionId in known },
                     )
                 }
 
@@ -185,21 +217,28 @@ class SessionsClient(
                     .copy(lastTurn = event)
 
                 is AskEvent -> current.waitingOnYou(
-                    sessionId = event.sessionId,
-                    requestId = event.requestId,
-                    line = event.questions.firstOrNull()?.question ?: "a question",
+                    PendingRequest.Ask(
+                        sessionId = event.sessionId,
+                        requestId = event.requestId,
+                        questions = event.questions,
+                    ),
                 )
 
                 is PermissionEvent -> current.waitingOnYou(
-                    sessionId = event.sessionId,
-                    requestId = event.requestId,
-                    line = "${event.tool} — ${event.display}",
+                    PendingRequest.Permission(
+                        sessionId = event.sessionId,
+                        requestId = event.requestId,
+                        tool = event.tool,
+                        display = event.display,
+                        suggestions = event.suggestions,
+                    ),
                 )
 
                 // Possibly answered from the CLI, the phone, or another watch. Saying so
                 // beats a card that silently stops mattering.
                 is ResolvedEvent -> current
                     .withSession(event.sessionId) { it.copy(pendingRequestIds = it.pendingRequestIds - event.requestId) }
+                    .copy(pending = current.pending - event.requestId)
                     .let { after ->
                         if (event.by == null || event.by == deviceId) {
                             after
@@ -259,18 +298,32 @@ class SessionsClient(
 
     /**
      * A replayed `subscribe` re-sends every outstanding request, so the same block can
-     * arrive twice. Pending is a set; the transcript line only lands the first time.
+     * arrive twice. The request map and the pending set both key on requestId; the
+     * transcript line only lands the first time.
      */
-    private fun WatchState.waitingOnYou(sessionId: String, requestId: String, line: String): WatchState {
-        val alreadyKnown = session(sessionId)?.pendingRequestIds?.contains(requestId) == true
-        val pending = withSession(sessionId) {
-            it.copy(pendingRequestIds = (it.pendingRequestIds + requestId).distinct())
+    private fun WatchState.waitingOnYou(request: PendingRequest): WatchState {
+        // The snapshot that lands on a reconnect already names every blocked request, and the
+        // replay that follows it re-sends the requests themselves. Either one is proof this
+        // is not news.
+        val alreadyKnown = request.requestId in pending ||
+            session(request.sessionId)?.pendingRequestIds?.contains(request.requestId) == true
+        val waiting = withSession(request.sessionId) {
+            it.copy(pendingRequestIds = (it.pendingRequestIds + request.requestId).distinct())
+        }.copy(pending = pending + (request.requestId to request))
+        return if (alreadyKnown) {
+            waiting
+        } else {
+            waiting.plusLine(request.sessionId, TranscriptLine.Kind.WAITING, request.summary, request.requestId)
         }
-        return if (alreadyKnown) pending else pending.plusLine(sessionId, TranscriptLine.Kind.WAITING, line)
     }
 
-    private fun WatchState.plusLine(sessionId: String, kind: TranscriptLine.Kind, text: String): WatchState {
-        val lines = (transcripts[sessionId].orEmpty() + TranscriptLine(kind, text)).takeLast(TRANSCRIPT_LIMIT)
+    private fun WatchState.plusLine(
+        sessionId: String,
+        kind: TranscriptLine.Kind,
+        text: String,
+        requestId: String? = null,
+    ): WatchState {
+        val lines = (transcripts[sessionId].orEmpty() + TranscriptLine(kind, text, requestId)).takeLast(TRANSCRIPT_LIMIT)
         return copy(transcripts = transcripts + (sessionId to lines))
     }
 }

@@ -32,9 +32,10 @@ import androidx.wear.compose.material.TimeTextDefaults
  * Text entry, such as it is on a watch: the platform keyboard, handwriting, or whatever
  * input method the wearer has.
  *
- * M3 replaces this everywhere with the platform recognizer — dictation in-app and
- * `RemoteInput` from the shade — which is the input this product is actually for. Until
- * then a field is honest about being the fallback rather than pretending to be the path.
+ * The fallback rather than the path. Dictation is what this product is for — the platform
+ * recognizer in the app, `RemoteInput` in the shade — but a bridge address and an 8-digit
+ * pairing code are not things anybody wants to say out loud, and a recognizer that mishears
+ * a directory is worse than typing one.
  */
 @Composable
 fun Field(

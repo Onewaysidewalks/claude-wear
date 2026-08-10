@@ -16,11 +16,14 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.wear.ongoing.OngoingActivity
 import androidx.wear.ongoing.Status
+import dev.claudewear.protocol.PermissionDecision
 import dev.claudewear.wear.MainActivity
 import dev.claudewear.wear.R
 import dev.claudewear.wear.data.TokenStore
+import dev.claudewear.wear.notify.Replies
 import dev.claudewear.wear.notify.SocketNotifications
 import dev.claudewear.wear.transport.WebSocketTransport
+import dev.claudewear.wear.ui.PendingRequest
 import dev.claudewear.wear.ui.SessionsClient
 import dev.claudewear.wear.ui.WatchState
 import kotlinx.coroutines.CoroutineScope
@@ -78,6 +81,7 @@ class ConnectionService : Service() {
         }
 
         if (client == null) connect(baseUrl, token, tokens.deviceId ?: "unknown")
+        Replies.read(intent)?.let(::deliver)
         // Restarted after the system reclaims the process: being back on the socket without
         // being asked is the whole contract this service signs.
         return START_STICKY
@@ -86,7 +90,7 @@ class ConnectionService : Service() {
     private fun connect(baseUrl: String, token: String, deviceId: String) {
         val live = SessionsClient(
             transport = WebSocketTransport(baseUrl, token),
-            notifications = SocketNotifications(this),
+            notifications = SocketNotifications(this) { requestId -> client?.state?.value?.request(requestId) },
             scope = scope,
             deviceId = deviceId,
             deviceName = Build.MODEL ?: "watch",
@@ -95,6 +99,56 @@ class ConnectionService : Service() {
         ActiveConnection.publish(live)
         live.start()
         scope.launch { live.state.collectLatest { promote(it) } }
+    }
+
+    // --- answering from the shade ------------------------------------------------
+
+    /**
+     * A tap or a dictated sentence from a notification, without the app ever coming up.
+     *
+     * It arrives here rather than at a receiver because this service owns the socket: if the
+     * process was reclaimed between the buzz and the reply, starting it is what had to happen
+     * anyway. The frame goes out on the connection [connect] just made — `send` parks until
+     * the socket is open, so a reply given while it is still reconnecting is queued, not lost.
+     */
+    private fun deliver(reply: Replies.Reply) {
+        val live = client ?: return
+        val requestId = reply.requestId
+        val text = reply.text
+        when {
+            // Nothing is blocked; the chat is simply yours, so this is the next prompt.
+            requestId == null -> text?.let { live.prompt(reply.sessionId, it) }
+
+            reply.decision == PermissionDecision.DENY ->
+                live.decide(reply.sessionId, requestId, PermissionDecision.DENY, text)
+
+            reply.decision != null -> live.decide(reply.sessionId, requestId, reply.decision)
+
+            text != null -> answerFromTheShade(live, reply.sessionId, requestId, text)
+
+            else -> Log.w(TAG, "a reply with neither a decision nor any text")
+        }
+    }
+
+    /**
+     * A dictated answer to a question.
+     *
+     * The notification offers the first question's options as tappable choices, so the text
+     * that comes back is either one of those labels — a real answer to that question — or
+     * something the wearer said instead. Anything that is not a label goes in as the
+     * top-level `response`: Claude receives "The user responded: …" and can deal with a
+     * sentence, whereas guessing which of four questions a sentence answers cannot be done
+     * from the shade and should not be attempted.
+     */
+    private fun answerFromTheShade(live: SessionsClient, sessionId: String, requestId: String, text: String) {
+        val ask = live.state.value.request(requestId) as? PendingRequest.Ask
+        val question = ask?.questions?.firstOrNull()
+        val chosen = question?.options?.firstOrNull { it.label.equals(text, ignoreCase = true) }
+        if (question != null && chosen != null && ask.questions.size == 1) {
+            live.answer(sessionId, requestId, mapOf(question.question to chosen.label))
+        } else {
+            live.respond(sessionId, requestId, text)
+        }
     }
 
     override fun onDestroy() {
