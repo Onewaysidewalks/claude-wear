@@ -133,14 +133,18 @@ TEST_STATUS=0
 # failed, and that is exactly when you want the picture.
 log "collecting the screen tour"
 pull_shots() {
-  local names name
+  local listing names name
+  # -1 so the listing is one name per line whatever `ls` would rather do.
+  listing="$(adb exec-out run-as "$APP_ID" ls -1 "$DEVICE_SHOT_DIR" 2>&1 | tr -d '\r' || true)"
+
+  # Echoed verbatim, because what the device actually holds is the one thing that has been
+  # missing every time this has gone wrong, and it is fifteen short lines.
+  printf '    device listing:\n%s\n' "${listing:-(empty)}" | sed 's/^/    /' >&2
+
   # Filtered to things that are actually screenshots, because `run-as` reports its own
   # failures on stdout — "run-as: unknown package: …" once became a filename, and a colon
   # in a filename is what actually broke the build.
-  names="$(
-    adb exec-out run-as "$APP_ID" ls "$DEVICE_SHOT_DIR" 2>/dev/null |
-      tr -d '\r' | grep -E '^[A-Za-z0-9._-]+\.png$' || true
-  )"
+  names="$(grep -E '^[A-Za-z0-9._-]+\.png$' <<<"$listing" || true)"
   [[ -n "$names" ]] || return 1
   while IFS= read -r name; do
     # exec-out rather than shell: no pty means no CRLF translation to corrupt a PNG.
