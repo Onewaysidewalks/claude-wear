@@ -44,7 +44,19 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+
+      # Robolectric fetches an android-all jar the first time it runs and puts it here, not
+      # in the Gradle caches. Without this the screenshot job re-downloads ~100MB per run.
+      - name: Cache Robolectric's android-all jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ hashFiles('wear/gradle/libs.versions.toml') }}
+          restore-keys: robolectric-${{ runner.os }}-
+
+      # verifyRoborazziDebug runs the unit tests with screenshot comparison switched on, so
+      # this is one test execution, not two.
+      - run: ./gradlew --no-daemon :app:verifyRoborazziDebug :app:lintDebug :app:assembleDebug
         working-directory: wear
       - uses: actions/upload-artifact@v4
         if: always()
@@ -52,6 +64,7 @@ jobs:
           name: android-reports
           path: |
             wear/app/build/reports/
+            wear/app/build/outputs/roborazzi/
             wear/app/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore
 
@@ -127,6 +140,15 @@ jobs:
           emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
           disable-animations: true
           script: ./scripts/e2e.sh
+
+      # Every run, pass or fail: this is what the screens actually looked like on a watch,
+      # and it is worth having on a PR that changed one.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wear-screenshots
+          path: .e2e/shots/
+          if-no-files-found: warn
 
       - uses: actions/upload-artifact@v4
         if: failure()

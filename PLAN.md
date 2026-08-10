@@ -419,6 +419,7 @@ fixture. Nothing in CI needs a secret, a container registry, or a running deploy
 | Protocol contract | Vitest + JUnit | both sides decode **and** re-encode every `protocol/golden/*.json`; drift fails CI |
 | Wear unit | JUnit + Turbine | ViewModels against a fake WS transport; no device needed |
 | Wear UI | Robolectric + Compose test rule | question card renders 4 options, multiSelect toggles, permission card shows the command |
+| Wear screens | Roborazzi on a Robolectric Wear device | every state in `Gallery` matches a committed PNG; a screen that silently changes shape fails the PR. Photographed again on the emulator by `ScreenTourTest` and uploaded as an artifact |
 | Wear notifications | Robolectric + `ShadowNotificationManager` | three concurrent sessions produce three grouped notifications; a shade reply resolves the right `requestId`; a `resolved` event cancels the right card |
 | E2E | Wear emulator + fake bridge | full loop, scripted — including two sessions blocked at once |
 

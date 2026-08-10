@@ -13,10 +13,7 @@ import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
-import androidx.wear.compose.material.PositionIndicator
-import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
 
 private const val CODE_LENGTH = 8
 
@@ -38,7 +35,7 @@ fun PairScreen(
     var code by rememberSaveable { mutableStateOf("") }
     val listState = rememberScalingLazyListState()
 
-    Scaffold(timeText = { TimeText() }, positionIndicator = { PositionIndicator(listState) }) {
+    WatchScaffold(listState) {
         ScalingLazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),

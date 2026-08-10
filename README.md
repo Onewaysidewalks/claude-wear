@@ -41,6 +41,7 @@ make install      # bridge dependencies
 make bridge       # lint, typecheck, test
 make dev          # a fully interactive bridge with a fake agent
 make cli          # drive a running bridge from a terminal
+make screenshots  # re-record the watch screenshots after a UI change
 make e2e          # fake bridge + Wear emulator + the real app
 make ci           # everything CI runs except the emulator job
 ```
@@ -73,11 +74,31 @@ make protocol-check   # fail if a generated file is stale
 make contract         # the golden fixtures, both sides
 ```
 
+## What the screens look like
+
+`wear/app/src/test/screenshots/` holds a PNG of every screen state that matters — the list
+with a chat waiting on you, a refused pairing code, the mode screen with `bypassPermissions`
+selected. They are committed, and CI fails if a screen stops matching one.
+
+```sh
+make screenshots        # re-record after an intended change, then look at the diff
+make screenshots-check  # what CI runs
+```
+
+The states are declared once, in [`Gallery.kt`](wear/app/src/main/kotlin/dev/claudewear/wear/ui/Gallery.kt),
+and three things read that list: Android Studio's preview pane, the Robolectric goldens, and
+`ScreenTourTest`, which photographs the same poses on the emulator during `make e2e` — those
+land in `.e2e/shots/` and CI uploads them on every run. Adding a state to `Gallery` adds it
+everywhere. No emulator is involved in the goldens; they are a unit test.
+
+Robolectric draws these, not a real watch, so the goldens are evidence about layout and
+copy — not about what a physical Galaxy Watch renders. That is what the emulator tour is for.
+
 ## CI
 
-Four jobs on every PR and on `main`: `bridge`, `android`, `contract` (regenerate, fail if
-the tree is dirty, then golden tests both sides) and `e2e` (a Wear emulator on a hosted
-runner). `release.yml` is M4.
+Four jobs on every PR and on `main`: `bridge`, `android` (unit tests, screenshots, lint,
+APK), `contract` (regenerate, fail if the tree is dirty, then golden tests both sides) and
+`e2e` (a Wear emulator on a hosted runner). `release.yml` is M4.
 
 ## Security posture in one line
 

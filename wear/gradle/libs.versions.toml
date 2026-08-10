@@ -16,6 +16,7 @@ composeBom = "2024.10.01"
 lifecycle = "2.8.7"
 wearCompose = "1.4.0"
 wearOngoing = "1.0.0"
+wearToolingPreview = "1.0.0"
 securityCrypto = "1.1.0-alpha06"
 
 coroutines = "1.9.0"
@@ -26,6 +27,12 @@ junit = "4.13.2"
 androidxTestJunit = "1.2.1"
 androidxTestRunner = "1.6.2"
 turbine = "1.2.0"
+
+# Screenshots. Roborazzi renders the screens on a Robolectric Wear device — no emulator, so
+# the goldens are a unit test. Robolectric 4.14.1 is the newest that still ships an SDK 34
+# android-all jar, which is the API level everything else here is pinned to.
+roborazzi = "1.32.2"
+robolectric = "4.14.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -40,6 +47,7 @@ wear-compose-material = { module = "androidx.wear.compose:compose-material", ver
 wear-compose-foundation = { module = "androidx.wear.compose:compose-foundation", version.ref = "wearCompose" }
 wear-compose-navigation = { module = "androidx.wear.compose:compose-navigation", version.ref = "wearCompose" }
 wear-ongoing = { module = "androidx.wear:wear-ongoing", version.ref = "wearOngoing" }
+wear-tooling-preview = { module = "androidx.wear:wear-tooling-preview", version.ref = "wearToolingPreview" }
 
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
@@ -52,9 +60,16 @@ androidx-test-junit = { module = "androidx.test.ext:junit", version.ref = "andro
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }

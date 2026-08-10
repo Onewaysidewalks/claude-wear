@@ -13,6 +13,8 @@
 #   AVD_NAME      default wearos_small_round
 #   SYSTEM_IMAGE  default system-images;android-34;android-wear;x86_64
 #   KEEP_BRIDGE   set to 1 to leave the bridge running after the test
+#
+# Leaves a photograph of every screen in .e2e/shots/, taken on the emulator by ScreenTourTest.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,6 +24,12 @@ SYSTEM_IMAGE="${SYSTEM_IMAGE:-system-images;android-34;android-wear;x86_64}"
 WORK_DIR="$REPO_ROOT/.e2e"
 BRIDGE_LOG="$WORK_DIR/bridge.log"
 BRIDGE_STATE="$WORK_DIR/state"
+SHOT_DIR="$WORK_DIR/shots"
+APP_ID="dev.claudewear.wear"
+# Relative to the app's data directory, because `run-as` starts there. Internal storage
+# rather than /sdcard: Android 11 closed `/sdcard/Android/data/<pkg>` to the shell user, so
+# `adb pull` returns nothing from there and does not say why.
+DEVICE_SHOT_DIR="files/screenshots"
 BRIDGE_PID=""
 EMULATOR_PID=""
 
@@ -47,7 +55,7 @@ cleanup() {
 trap cleanup EXIT
 
 rm -rf "$WORK_DIR"
-mkdir -p "$WORK_DIR" "$BRIDGE_STATE"
+mkdir -p "$WORK_DIR" "$BRIDGE_STATE" "$SHOT_DIR"
 
 # --- 1. the bridge, with a fake agent -----------------------------------------------
 
@@ -109,12 +117,57 @@ adb shell input keyevent 82 >/dev/null 2>&1 || true
 
 # --- 3. the app ---------------------------------------------------------------------
 
-log "installing and running the instrumented test"
+log "installing and running the instrumented tests"
 cd "$REPO_ROOT/wear"
+# The emulator may be one CI kept around; last run's photographs are not this run's. Fails
+# harmlessly when the app is not installed yet, which is the usual case.
+adb exec-out run-as "$APP_ID" rm -rf "$DEVICE_SHOT_DIR" >/dev/null 2>&1 || true
+TEST_STATUS=0
 ./gradlew --no-daemon :app:connectedDebugAndroidTest \
   "-Pandroid.testInstrumentationRunnerArguments.bridgeUrl=http://10.0.2.2:$BRIDGE_PORT" \
   "-Pandroid.testInstrumentationRunnerArguments.pairCode=$PAIR_CODE" \
-  "-Pandroid.testInstrumentationRunnerArguments.cwd=$REPO_ROOT"
+  "-Pandroid.testInstrumentationRunnerArguments.cwd=$REPO_ROOT" \
+  -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true || TEST_STATUS=$?
+
+# Pulled before the status check, because a screen that looks wrong is often *why* the run
+# failed, and that is exactly when you want the picture.
+log "collecting the screen tour"
+pull_shots() {
+  local listing names name
+  # -1 so the listing is one name per line whatever `ls` would rather do.
+  listing="$(adb exec-out run-as "$APP_ID" ls -1 "$DEVICE_SHOT_DIR" 2>&1 | tr -d '\r' || true)"
+
+  # Echoed verbatim, because what the device actually holds is the one thing that has been
+  # missing every time this has gone wrong, and it is fifteen short lines.
+  printf '    device listing:\n%s\n' "${listing:-(empty)}" | sed 's/^/    /' >&2
+
+  # Filtered to things that are actually screenshots, because `run-as` reports its own
+  # failures on stdout — "run-as: unknown package: …" once became a filename, and a colon
+  # in a filename is what actually broke the build.
+  names="$(grep -E '^[A-Za-z0-9._-]+\.png$' <<<"$listing" || true)"
+  [[ -n "$names" ]] || return 1
+  while IFS= read -r name; do
+    # exec-out rather than shell: no pty means no CRLF translation to corrupt a PNG.
+    # </dev/null matters: adb forwards its stdin to the device, and without this it eats
+    # the rest of the here-string below, so the loop pulls exactly one file and stops.
+    adb exec-out run-as "$APP_ID" cat "$DEVICE_SHOT_DIR/$name" >"$SHOT_DIR/$name" </dev/null
+  done <<<"$names"
+
+  # The count is the check. Both ways this has gone wrong so far — a swallowed listing and a
+  # swallowed loop — looked like success and produced a near-empty gallery.
+  local wanted found
+  wanted="$(wc -l <<<"$names" | tr -d '[:space:]')"
+  found="$(find "$SHOT_DIR" -name '*.png' | wc -l | tr -d '[:space:]')"
+  [[ "$found" -eq "$wanted" ]] || warn "the device had $wanted screenshots but only $found came back"
+}
+
+if pull_shots; then
+  log "$(find "$SHOT_DIR" -name '*.png' | wc -l | tr -d '[:space:]') screenshots in ${SHOT_DIR#"$REPO_ROOT"/}"
+else
+  warn "no screenshots on the device; ScreenTourTest may not have run"
+fi
+
+[[ $TEST_STATUS -eq 0 ]] || die "the instrumented tests failed"
 
 # --- 4. assert against what the bridge actually received -----------------------------
 
