@@ -1,13 +1,20 @@
 package dev.claudewear.wear.ui
 
 import app.cash.turbine.test
+import dev.claudewear.protocol.AnswerMessage
 import dev.claudewear.protocol.AskEvent
+import dev.claudewear.protocol.AskOption
 import dev.claudewear.protocol.AskQuestion
 import dev.claudewear.protocol.ClientMessage
 import dev.claudewear.protocol.ErrorCode
 import dev.claudewear.protocol.ErrorEvent
 import dev.claudewear.protocol.HelloMessage
+import dev.claudewear.protocol.PermissionDecision
+import dev.claudewear.protocol.PermissionDecisionMessage
+import dev.claudewear.protocol.PermissionEvent
 import dev.claudewear.protocol.PermissionMode
+import dev.claudewear.protocol.PermissionRule
+import dev.claudewear.protocol.PermissionSuggestion
 import dev.claudewear.protocol.PromptMessage
 import dev.claudewear.protocol.REGISTRY_SESSION_ID
 import dev.claudewear.protocol.Resolution
@@ -37,6 +44,8 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -127,11 +136,56 @@ private fun ask(seq: Long, requestId: String, sessionId: String = "s_1") = AskEv
         AskQuestion(
             question = "How should I format the output?",
             header = "Format",
-            options = emptyList(),
+            options = listOf(AskOption("Summary", "A few sentences"), AskOption("Full report", null)),
             multiSelect = false,
+        ),
+        AskQuestion(
+            question = "Which sections?",
+            header = "Sections",
+            options = listOf(AskOption("Intro", null), AskOption("Findings", null)),
+            multiSelect = true,
         ),
     ),
 )
+
+private fun permission(seq: Long, requestId: String, sessionId: String = "s_1") = PermissionEvent(
+    sessionId = sessionId,
+    seq = seq,
+    requestId = requestId,
+    tool = "Bash",
+    input = buildJsonObject { put("command", "npm test") },
+    display = "npm test",
+    suggestions = listOf(
+        PermissionSuggestion(
+            type = "addRules",
+            behavior = "allow",
+            // Only a localSettings rule may be persisted from a wrist tap, so only this one
+            // is allowed to become an "always allow" button.
+            destination = "localSettings",
+            rules = listOf(PermissionRule("Bash", "npm test:*")),
+        ),
+        PermissionSuggestion(
+            type = "addRules",
+            behavior = "allow",
+            destination = "userSettings",
+            rules = listOf(PermissionRule("Bash", "*")),
+        ),
+    ),
+)
+
+/** Records what the notification layer was told, which the vibration alone cannot show. */
+private class RecordingNotifications : NotificationTransport {
+    val turns = mutableListOf<TurnEvent>()
+    val resolved = mutableListOf<Pair<String, String>>()
+
+    override fun onTurn(event: TurnEvent) {
+        turns += event
+    }
+
+    override fun onResolved(sessionId: String, requestId: String) {
+        resolved += sessionId to requestId
+    }
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionsClientTest {
@@ -253,7 +307,7 @@ class SessionsClientTest {
         assertEquals(listOf("s_2", "s_1"), vm.state.value.sessions.map { it.sessionId })
         assertEquals(listOf("req_1"), vm.state.value.session("s_2")?.pendingRequestIds)
         assertEquals(
-            TranscriptLine(TranscriptLine.Kind.WAITING, "How should I format the output?"),
+            TranscriptLine(TranscriptLine.Kind.WAITING, "How should I format the output?", "req_1"),
             vm.state.value.transcript("s_2").single(),
         )
 
@@ -332,6 +386,151 @@ class SessionsClientTest {
             TranscriptLine(TranscriptLine.Kind.PROBLEM, "bypassPermissions is off on this bridge"),
             vm.state.value.transcript("s_1").single(),
         )
+    }
+
+    @Test
+    fun keepsTheWholeRequestSoACardCanShowIt() = runTest {
+        val transport = FakeTransport()
+        val vm = client(transport, scope = eagerScope())
+        vm.start()
+
+        transport.events.emit(sessions(1, summary("s_1")))
+        transport.events.emit(ask(1, "req_ask"))
+        transport.events.emit(permission(2, "req_perm"))
+
+        val question = vm.state.value.request("req_ask") as PendingRequest.Ask
+        assertEquals(2, question.questions.size)
+        assertEquals(listOf("Summary", "Full report"), question.questions.first().options.map { it.label })
+
+        val perm = vm.state.value.request("req_perm") as PendingRequest.Permission
+        // The actual command, not a summary of one — the card renders exactly this.
+        assertEquals("npm test", perm.display)
+        // Only what a wrist tap may persist. A userSettings suggestion is not an offer this
+        // product makes from a 1.5" screen.
+        assertEquals(listOf("npm test:*"), perm.alwaysRules)
+
+        assertEquals(listOf("req_ask", "req_perm"), vm.state.value.pending("s_1").map { it.requestId })
+    }
+
+    @Test
+    fun answersAQuestionTheWayTheSdkWantsIt() = runTest {
+        val transport = FakeTransport()
+        val vm = client(transport, scope = eagerScope())
+        vm.start()
+        transport.events.emit(sessions(1, summary("s_1")))
+        transport.events.emit(ask(1, "req_1"))
+
+        vm.answer(
+            "s_1",
+            "req_1",
+            mapOf(
+                "How should I format the output?" to "Summary",
+                // multiSelect labels arrive already joined; the SDK's answers map is
+                // question text -> one string, however many chips were tapped.
+                "Which sections?" to "Intro, Findings",
+            ),
+        )
+
+        val sent = transport.sent.filterIsInstance<AnswerMessage>().single()
+        assertEquals("req_1", sent.requestId)
+        assertEquals("Summary", sent.answers?.get("How should I format the output?"))
+        assertEquals("Intro, Findings", sent.answers?.get("Which sections?"))
+        assertNull(sent.response)
+    }
+
+    @Test
+    fun dismissesTheQuestionsAndJustTalks() = runTest {
+        val transport = FakeTransport()
+        val vm = client(transport, scope = eagerScope())
+        vm.start()
+        transport.events.emit(sessions(1, summary("s_1")))
+        transport.events.emit(ask(1, "req_1"))
+
+        vm.respond("s_1", "req_1", "neither — look at the failing test first")
+
+        val sent = transport.sent.filterIsInstance<AnswerMessage>().single()
+        // Exactly one of the two is set: Claude gets "The user responded: …" rather than an
+        // answer to a question the wearer did not want to answer.
+        assertNull(sent.answers)
+        assertEquals("neither — look at the failing test first", sent.response)
+    }
+
+    @Test
+    fun sendsTheThreePermissionDecisions() = runTest {
+        val transport = FakeTransport()
+        val vm = client(transport, scope = eagerScope())
+        vm.start()
+        transport.events.emit(sessions(1, summary("s_1")))
+
+        vm.decide("s_1", "req_1", PermissionDecision.ALLOW)
+        vm.decide("s_1", "req_2", PermissionDecision.ALLOW_ALWAYS)
+        vm.decide("s_1", "req_3", PermissionDecision.DENY, "wrong directory")
+
+        val sent = transport.sent.filterIsInstance<PermissionDecisionMessage>()
+        assertEquals(
+            listOf(PermissionDecision.ALLOW, PermissionDecision.ALLOW_ALWAYS, PermissionDecision.DENY),
+            sent.map { it.decision },
+        )
+        // Claude sees the deny message, which is why the card offers reasons at all.
+        assertEquals("wrong directory", sent.last().message)
+    }
+
+    @Test
+    fun dropsTheCardWhenTheRequestIsResolvedAnywhere() = runTest {
+        val transport = FakeTransport()
+        val notifications = RecordingNotifications()
+        val vm = client(transport, scope = eagerScope(), notifications = notifications)
+        vm.start()
+
+        transport.events.emit(sessions(1, summary("s_1")))
+        transport.events.emit(permission(1, "req_1"))
+        transport.events.emit(
+            ResolvedEvent(
+                sessionId = "s_1",
+                seq = 2,
+                requestId = "req_1",
+                resolution = Resolution.ALLOWED,
+                by = "dev_phone",
+            ),
+        )
+
+        assertNull(vm.state.value.request("req_1"))
+        assertEquals(emptyList<PendingRequest>(), vm.state.value.pending("s_1"))
+        // And the notification goes with it: a card offering a decision that has already
+        // been made is worse than no card.
+        assertEquals(listOf("s_1" to "req_1"), notifications.resolved)
+    }
+
+    @Test
+    fun aChatThatClosesTakesItsRequestsWithIt() = runTest {
+        val transport = FakeTransport()
+        val vm = client(transport, scope = eagerScope())
+        vm.start()
+
+        transport.events.emit(sessions(1, summary("s_1"), summary("s_2")))
+        transport.events.emit(permission(1, "req_1", sessionId = "s_1"))
+        transport.events.emit(permission(1, "req_2", sessionId = "s_2"))
+        transport.events.emit(sessions(2, summary("s_2")))
+
+        assertNull(vm.state.value.request("req_1"))
+        assertEquals(listOf("req_2"), vm.state.value.pending.keys.toList())
+    }
+
+    @Test
+    fun aReplayedRequestAfterAReconnectDoesNotSayItTwice() = runTest {
+        val transport = FakeTransport()
+        val vm = client(transport, scope = eagerScope())
+        vm.start()
+
+        transport.events.emit(sessions(1, summary("s_1")))
+        transport.events.emit(ask(1, "req_1"))
+        // A reconnect: the snapshot already names the blocked request, and the replay that
+        // follows re-sends the request itself.
+        transport.events.emit(sessions(2, summary("s_1", pending = listOf("req_1"))))
+        transport.events.emit(ask(2, "req_1"))
+
+        assertEquals(1, vm.state.value.transcript("s_1").size)
+        assertEquals(listOf("req_1"), vm.state.value.pending.keys.toList())
     }
 
     @Test

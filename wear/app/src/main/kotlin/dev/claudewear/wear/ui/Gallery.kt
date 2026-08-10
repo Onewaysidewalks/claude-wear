@@ -6,7 +6,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.TimeSource
 import androidx.wear.tooling.preview.devices.WearDevices
+import dev.claudewear.protocol.AskOption
+import dev.claudewear.protocol.AskQuestion
 import dev.claudewear.protocol.PermissionMode
+import dev.claudewear.protocol.PermissionRule
+import dev.claudewear.protocol.PermissionSuggestion
 import dev.claudewear.protocol.SessionState
 import dev.claudewear.protocol.SessionSummary
 
@@ -55,6 +59,12 @@ internal object Gallery {
         Pose("chat-waiting", reveal = "waiting on you") { ChatWaitingPreview() },
         Pose("chat-problem", reveal = "ANTHROPIC_API_KEY") { ChatProblemPreview() },
         Pose("chat-gone") { ChatGonePreview() },
+        Pose("question-one") { QuestionOnePreview() },
+        Pose("question-multi", reveal = "pick as many") { QuestionMultiPreview() },
+        Pose("question-two", reveal = "Which sections") { QuestionTwoPreview() },
+        Pose("question-answered") { QuestionAnsweredPreview() },
+        Pose("permission-bash", reveal = "Always allow") { PermissionBashPreview() },
+        Pose("permission-deny", reveal = "wrong directory") { PermissionDenyPreview() },
         Pose("new-chat-roots") { NewChatRootsPreview() },
         Pose("new-chat-permissive") { NewChatPermissivePreview() },
         Pose("modes-default") { ModesDefaultPreview() },
@@ -105,13 +115,25 @@ private val connected = WatchState(
     projectRoots = listOf(CWD, "/home/you/code/bridge-notes"),
 )
 
-private val oneWaiting = connected.copy(sessions = listOf(linter, docs))
+/** What `linter` is blocked on, so the chat screen can lead with the card that opens it. */
+private val lintDebug = PendingRequest.Permission(
+    sessionId = LINTER,
+    requestId = "req_1",
+    tool = "Bash",
+    display = "./gradlew :app:lintDebug",
+    suggestions = emptyList(),
+)
+
+private val oneWaiting = connected.copy(
+    sessions = listOf(linter, docs),
+    pending = mapOf(lintDebug.requestId to lintDebug),
+)
 
 private val transcript = listOf(
     TranscriptLine(TranscriptLine.Kind.YOU, "run the linter and fix what it finds"),
     TranscriptLine(TranscriptLine.Kind.CLAUDE, "Ran ktlint. 3 findings, all in ChatScreen.kt."),
     TranscriptLine(TranscriptLine.Kind.CLAUDE, "Two are import order. The third is a long line."),
-    TranscriptLine(TranscriptLine.Kind.WAITING, "may I run `./gradlew :app:lintDebug`?"),
+    TranscriptLine(TranscriptLine.Kind.WAITING, lintDebug.summary, lintDebug.requestId),
 )
 
 // --- pairing ------------------------------------------------------------------------------
@@ -211,6 +233,110 @@ internal fun ChatGonePreview() = OnAWatch { Chat(connected, "sess_vanished") }
 @Composable
 private fun Chat(state: WatchState, sessionId: String) =
     ChatScreen(state = state, sessionId = sessionId, onPrompt = {}, onInterrupt = {}, onModes = {})
+
+// --- the cards ------------------------------------------------------------------------------
+
+/** The common case: one question, tap an option, done. No confirm step to photograph. */
+@Preview(name = "Question — one", device = WearDevices.SMALL_ROUND, showBackground = true)
+@Composable
+internal fun QuestionOnePreview() = OnAWatch { Question(format) }
+
+/** Toggles and a Send, because a multiSelect cannot know when you have finished picking. */
+@Preview(name = "Question — multiSelect", device = WearDevices.SMALL_ROUND, showBackground = true)
+@Composable
+internal fun QuestionMultiPreview() = OnAWatch { Question(sections) }
+
+/** Four questions is the SDK's limit and the case the headers exist for. */
+@Preview(name = "Question — two questions", device = WearDevices.SMALL_ROUND, showBackground = true)
+@Composable
+internal fun QuestionTwoPreview() = OnAWatch {
+    Question(PendingRequest.Ask(LINTER, "req_1", format.questions + sections.questions))
+}
+
+/** Answered from the CLI or a phone while the card was on your wrist. */
+@Preview(name = "Question — already answered", device = WearDevices.SMALL_ROUND, showBackground = true)
+@Composable
+internal fun QuestionAnsweredPreview() = OnAWatch { Question(null) }
+
+@Preview(name = "Permission — a command", device = WearDevices.SMALL_ROUND, showBackground = true)
+@Composable
+internal fun PermissionBashPreview() = OnAWatch { Permission(npmTest) }
+
+@Preview(name = "Permission — why not", device = WearDevices.SMALL_ROUND, showBackground = true)
+@Composable
+internal fun PermissionDenyPreview() = OnAWatch { Permission(npmTest, denying = true) }
+
+private val format = PendingRequest.Ask(
+    sessionId = LINTER,
+    requestId = "req_1",
+    questions = listOf(
+        AskQuestion(
+            question = "How should I format the output?",
+            header = "Format",
+            options = listOf(
+                AskOption("Summary", "A few sentences"),
+                AskOption("Full report", "Every section, with detail"),
+            ),
+            multiSelect = false,
+        ),
+    ),
+)
+
+private val sections = PendingRequest.Ask(
+    sessionId = LINTER,
+    requestId = "req_2",
+    questions = listOf(
+        AskQuestion(
+            question = "Which sections?",
+            header = "Sections",
+            options = listOf(
+                AskOption("Intro", null),
+                AskOption("Findings", null),
+                AskOption("Appendix", null),
+            ),
+            multiSelect = true,
+        ),
+    ),
+)
+
+/**
+ * The command in full, and an "always allow" that names the rule it would write. A button
+ * that claims to remember something and does not is worse than no button.
+ */
+private val npmTest = PendingRequest.Permission(
+    sessionId = LINTER,
+    requestId = "req_3",
+    tool = "Bash",
+    display = "npm test -- --runInBand",
+    suggestions = listOf(
+        PermissionSuggestion(
+            type = "addRules",
+            behavior = "allow",
+            destination = "localSettings",
+            rules = listOf(PermissionRule("Bash", "npm test:*")),
+        ),
+    ),
+)
+
+@Composable
+private fun Question(request: PendingRequest.Ask?) = QuestionScreen(
+    request = request,
+    sessionName = "linter",
+    onAnswer = {},
+    onRespond = {},
+    onDictate = { _, _ -> },
+)
+
+@Composable
+private fun Permission(request: PendingRequest.Permission, denying: Boolean = false) = PermissionScreen(
+    request = request,
+    sessionName = "linter",
+    onAllow = {},
+    onAlways = {},
+    onDeny = {},
+    onDictate = { _, _ -> },
+    initiallyDenying = denying,
+)
 
 // --- starting one -------------------------------------------------------------------------
 

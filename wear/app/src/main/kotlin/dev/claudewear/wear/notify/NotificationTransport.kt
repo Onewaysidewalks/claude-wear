@@ -12,4 +12,14 @@ import dev.claudewear.protocol.TurnEvent
  */
 fun interface NotificationTransport {
     fun onTurn(event: TurnEvent)
+
+    /**
+     * A pending request stopped being pending — answered here, from the CLI, from a phone, or
+     * cancelled by the agent. Whatever card was showing it is now offering a decision that
+     * has already been made, which is worse than showing nothing.
+     *
+     * Not abstract, so a test that only cares about turns can still write
+     * `NotificationTransport { … }`.
+     */
+    fun onResolved(sessionId: String, requestId: String) = Unit
 }

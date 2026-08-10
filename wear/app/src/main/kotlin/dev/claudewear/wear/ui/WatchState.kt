@@ -1,6 +1,8 @@
 package dev.claudewear.wear.ui
 
+import dev.claudewear.protocol.AskQuestion
 import dev.claudewear.protocol.PermissionMode
+import dev.claudewear.protocol.PermissionSuggestion
 import dev.claudewear.protocol.SessionState
 import dev.claudewear.protocol.SessionSummary
 import dev.claudewear.protocol.TurnEvent
@@ -27,6 +29,12 @@ data class WatchState(
      * can arrive before the snapshot that names it and dropping that line would be a lie.
      */
     val transcripts: Map<String, List<TranscriptLine>> = emptyMap(),
+    /**
+     * Every block the agent is parked on, keyed by requestId — the id the bridge mints, so
+     * it is unique across chats and a dictated reply from the shade can name exactly the
+     * request it was attached to. Insertion-ordered, which is oldest-first.
+     */
+    val pending: Map<String, PendingRequest> = emptyMap(),
 ) {
     enum class Connection { CONNECTING, CONNECTED, OFFLINE }
 
@@ -37,6 +45,11 @@ data class WatchState(
     fun session(sessionId: String): SessionView? = sessions.find { it.sessionId == sessionId }
 
     fun transcript(sessionId: String): List<TranscriptLine> = transcripts[sessionId].orEmpty()
+
+    fun request(requestId: String): PendingRequest? = pending[requestId]
+
+    /** What this chat is blocked on, oldest first. */
+    fun pending(sessionId: String): List<PendingRequest> = pending.values.filter { it.sessionId == sessionId }
 
     /** `maxSessions == 0` means no snapshot has landed yet, not a bridge that allows none. */
     val canOpenAnother: Boolean get() = maxSessions == 0 || sessions.size < maxSessions
@@ -64,10 +77,56 @@ data class SessionView(
 }
 
 /**
+ * One block the agent is parked on, with everything its card needs to draw itself.
+ *
+ * Held rather than summarised, because the card's whole job is to show you the real thing:
+ * the questions as Claude asked them, and the actual command rather than a description of
+ * one. Approving what you cannot see is the failure mode this product designs against, and
+ * it gets worse the smaller the screen.
+ */
+sealed interface PendingRequest {
+    val sessionId: String
+    val requestId: String
+
+    /** One line, for the chat transcript and the notification. */
+    val summary: String
+
+    data class Ask(
+        override val sessionId: String,
+        override val requestId: String,
+        val questions: List<AskQuestion>,
+    ) : PendingRequest {
+        override val summary: String get() = questions.firstOrNull()?.question ?: "a question"
+    }
+
+    data class Permission(
+        override val sessionId: String,
+        override val requestId: String,
+        val tool: String,
+        /** The actual command or path, verbatim from the bridge. Never shortened here. */
+        val display: String,
+        val suggestions: List<PermissionSuggestion>,
+    ) : PendingRequest {
+        override val summary: String get() = "$tool — $display"
+
+        /**
+         * The rules an "always allow" would write, which is the only honest label for that
+         * button. The bridge only persists `localSettings` suggestions — a wrist tap should
+         * not edit your user-level config — so an offer with none of those is not an offer.
+         */
+        val alwaysRules: List<String>
+            get() = suggestions
+                .filter { it.destination == "localSettings" }
+                .flatMap { it.rules }
+                .mapNotNull { it.ruleContent ?: it.toolName }
+    }
+}
+
+/**
  * A condensed transcript line. The watch never gets token-by-token deltas — a wrist does
  * not need them and not sending them is a real battery saving — so a line is the unit.
  */
-data class TranscriptLine(val kind: Kind, val text: String) {
+data class TranscriptLine(val kind: Kind, val text: String, val requestId: String? = null) {
     enum class Kind {
         /** Assistant text. */
         CLAUDE,
@@ -75,7 +134,7 @@ data class TranscriptLine(val kind: Kind, val text: String) {
         /** Something you sent, echoed locally: the bridge does not reflect prompts back. */
         YOU,
 
-        /** A question or permission the agent is blocked on. The real cards are M3. */
+        /** A question or permission the agent is blocked on; [requestId] opens its card. */
         WAITING,
 
         /** The result of a turn. */

@@ -191,8 +191,24 @@ wants(received, "hello", "received");
 wants(received, "subscribe", "received");
 wants(received, "newSession", "received");
 wants(received, "prompt", "received");
+wants(received, "answer", "received");
+wants(received, "permission", "received");
 wants(sent, "sessions", "sent");
 wants(sent, "turn", "sent");
+wants(sent, "ask", "sent");
+wants(sent, "permission", "sent");
+wants(sent, "resolved", "sent");
+
+// The SDK's shape, not ours: the answers map is keyed by the question text. A watch that
+// sent the header, or the option's index, would look identical from here without this.
+const answer = entries.find((e) => e.direction === "in" && e.type === "answer");
+const asked = entries.find((e) => e.direction === "out" && e.type === "ask");
+if (answer && asked) {
+  const question = asked.payload.questions[0].question;
+  if (!answer.payload.answers || !(question in answer.payload.answers)) {
+    failures.push(`the answer was not keyed by the question text ("${question}")`);
+  }
+}
 
 const snapshot = entries.find((e) => e.direction === "out" && e.type === "sessions");
 if (snapshot && !Array.isArray(snapshot.payload.projectRoots)) {

@@ -25,6 +25,18 @@ data class WatchActions(
     val prompt: (sessionId: String, text: String) -> Unit = { _, _ -> },
     val interrupt: (sessionId: String) -> Unit = {},
     val setMode: (sessionId: String, mode: PermissionMode) -> Unit = { _, _ -> },
+    /** question text -> the chosen label, or dictated free text. */
+    val answer: (sessionId: String, requestId: String, answers: Map<String, String>) -> Unit = { _, _, _ -> },
+    /** Dismiss an AskUserQuestion and just talk to Claude instead. */
+    val respond: (sessionId: String, requestId: String, response: String) -> Unit = { _, _, _ -> },
+    val allow: (sessionId: String, requestId: String, always: Boolean) -> Unit = { _, _, _ -> },
+    val deny: (sessionId: String, requestId: String, reason: String?) -> Unit = { _, _, _ -> },
+    /**
+     * The platform speech recognizer. The result callback only fires with something worth
+     * sending — a cancelled or empty dictation is not an answer — so no screen has to guard
+     * against a blank.
+     */
+    val dictate: (prompt: String, onResult: (String) -> Unit) -> Unit = { _, _ -> },
 )
 
 private object Route {
@@ -34,13 +46,21 @@ private object Route {
     const val CHAT = "chat/{sessionId}"
     const val MODE = "mode/{sessionId}"
 
+    /**
+     * Keyed by requestId alone, not by session: the id is unique across chats, and it is
+     * what a notification's reply action carries. A card that outlived its request can then
+     * say so instead of rendering somebody else's question.
+     */
+    const val CARD = "card/{requestId}"
+
     fun chat(sessionId: String) = "chat/$sessionId"
     fun mode(sessionId: String) = "mode/$sessionId"
+    fun card(requestId: String) = "card/$requestId"
 }
 
 /**
- * Pair → Sessions → Chat, with swipe-to-dismiss as the back gesture because that is what
- * a round screen with no back button has.
+ * Pair → Sessions → Chat → the card you were buzzed about, with swipe-to-dismiss as the back
+ * gesture because that is what a round screen with no back button has.
  */
 @Composable
 fun ClaudeWearApp(
@@ -49,6 +69,9 @@ fun ClaudeWearApp(
     defaultBridgeUrl: String,
     pairing: PairingState,
     actions: WatchActions,
+    /** A notification you tapped: the chat to open, and the card on it if there is one. */
+    opening: Opening? = null,
+    onOpened: () -> Unit = {},
 ) {
     MaterialTheme {
         val nav = rememberSwipeDismissableNavController()
@@ -61,6 +84,18 @@ fun ClaudeWearApp(
             if (nav.currentDestination?.route != destination) {
                 nav.navigate(destination) { popUpTo(nav.graph.id) { inclusive = true } }
             }
+        }
+
+        // Tapping a card in the shade should land on the thing that buzzed you, not on the
+        // list. The chat goes on the back stack under it, so a swipe leaves you somewhere
+        // that makes sense rather than dumping you out of the app.
+        LaunchedEffect(opening) {
+            val target = opening ?: return@LaunchedEffect
+            if (paired) {
+                nav.navigate(Route.chat(target.sessionId))
+                if (target.requestId != null) nav.navigate(Route.card(target.requestId))
+            }
+            onOpened()
         }
 
         SwipeDismissableNavHost(
@@ -98,6 +133,8 @@ fun ClaudeWearApp(
                     onPrompt = { text -> actions.prompt(sessionId, text) },
                     onInterrupt = { actions.interrupt(sessionId) },
                     onModes = { nav.navigate(Route.mode(sessionId)) },
+                    onOpenRequest = { nav.navigate(Route.card(it)) },
+                    onDictate = actions.dictate,
                 )
             }
 
@@ -111,6 +148,59 @@ fun ClaudeWearApp(
                     },
                 )
             }
+
+            composable(Route.CARD) { entry ->
+                val requestId = entry.arguments?.getString("requestId").orEmpty()
+                // Answering pops the card. The `resolved` that follows drops the request from
+                // the state, and a screen still sitting on it would flip to "answered" under
+                // your thumb.
+                val answered = { nav.popBackStack() }
+                when (val request = state.request(requestId)) {
+                    is PendingRequest.Ask -> QuestionScreen(
+                        request = request,
+                        sessionName = state.session(request.sessionId)?.name.orEmpty(),
+                        onAnswer = {
+                            actions.answer(request.sessionId, requestId, it)
+                            answered()
+                        },
+                        onRespond = {
+                            actions.respond(request.sessionId, requestId, it)
+                            answered()
+                        },
+                        onDictate = actions.dictate,
+                    )
+
+                    is PendingRequest.Permission -> PermissionScreen(
+                        request = request,
+                        sessionName = state.session(request.sessionId)?.name.orEmpty(),
+                        onAllow = {
+                            actions.allow(request.sessionId, requestId, false)
+                            answered()
+                        },
+                        onAlways = {
+                            actions.allow(request.sessionId, requestId, true)
+                            answered()
+                        },
+                        onDeny = {
+                            actions.deny(request.sessionId, requestId, it)
+                            answered()
+                        },
+                        onDictate = actions.dictate,
+                    )
+
+                    // Dealt with somewhere else, or the agent gave up waiting.
+                    null -> QuestionScreen(
+                        request = null,
+                        sessionName = "",
+                        onAnswer = {},
+                        onRespond = {},
+                        onDictate = actions.dictate,
+                    )
+                }
+            }
         }
     }
 }
+
+/** A tapped notification, as the Activity hands it to the nav graph. */
+data class Opening(val sessionId: String, val requestId: String?)

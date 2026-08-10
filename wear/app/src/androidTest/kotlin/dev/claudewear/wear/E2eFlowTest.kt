@@ -2,12 +2,14 @@ package dev.claudewear.wear
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import dev.claudewear.protocol.PermissionDecision
 import dev.claudewear.protocol.SessionState
 import dev.claudewear.protocol.TurnEvent
 import dev.claudewear.wear.data.Http
 import dev.claudewear.wear.data.Pairing
 import dev.claudewear.wear.notify.NotificationTransport
 import dev.claudewear.wear.transport.WebSocketTransport
+import dev.claudewear.wear.ui.PendingRequest
 import dev.claudewear.wear.ui.SessionsClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,9 +30,15 @@ import org.junit.runner.RunWith
 /**
  * The end-to-end loop, on a Wear emulator against a bridge running `--fake` on the host.
  *
- * Pair, list sessions, open a chat, say something, receive a turn — the app's own transport
- * and client, not a test harness pretending to be them. Answering an AUQ and approving a
- * permission join this once there are cards to drive them, in M3.
+ * Pair, list sessions, answer the question the agent is blocked on, approve the command it
+ * wants to run, then say something — the app's own transport and client, not a test harness
+ * pretending to be them. The `auq-then-bash` scenario genuinely parks until each decision
+ * comes back, exactly as `canUseTool` parks a real agent, so getting to the end of it is
+ * proof the answers were understood and not merely sent.
+ *
+ * The cards themselves are driven by `CardsTest` on the JVM and photographed by
+ * `ScreenTourTest` on this same emulator; what this adds is the whole path over a real
+ * socket.
  *
  * scripts/e2e.sh supplies bridgeUrl, pairCode and cwd, and asserts against the bridge's
  * recorded inbox afterwards.
@@ -48,7 +56,7 @@ class E2eFlowTest {
     }
 
     @Test
-    fun pairsListsSessionsAndReceivesATurn() = runBlocking {
+    fun pairsAnswersAQuestionApprovesACommandAndSpeaks() = runBlocking {
         val pairing = withTimeout(TIMEOUT_MS) { Pairing.pair(bridgeUrl, pairCode, "e2e watch") }
         assertTrue("expected a device id", pairing.deviceId.startsWith("dev_"))
         assertTrue("expected a token", pairing.token.isNotEmpty())
@@ -90,6 +98,38 @@ class E2eFlowTest {
             assertTrue("a turn should say something", turn.summary.isNotEmpty())
             assertTrue("the notification transport should have been told", turns.isNotEmpty())
 
+            // The question card's job, over the wire: the answers map is keyed by the
+            // question text and valued by the label that was tapped.
+            val question = withTimeout(TIMEOUT_MS) {
+                client.state.first { it.pending.values.any { request -> request is PendingRequest.Ask } }
+                    .pending.values.filterIsInstance<PendingRequest.Ask>().first()
+            }
+            val asked = question.questions.first()
+            client.answer(
+                session.sessionId,
+                question.requestId,
+                mapOf(asked.question to asked.options.first().label),
+            )
+
+            // The scenario only reaches its Bash step once the answer is accepted, so a
+            // permission arriving at all is the answer having been understood.
+            val permission = withTimeout(TIMEOUT_MS) {
+                client.state.first { it.pending.values.any { request -> request is PendingRequest.Permission } }
+                    .pending.values.filterIsInstance<PendingRequest.Permission>().first()
+            }
+            // The card renders this verbatim; approving what you cannot see is the failure
+            // mode the whole product designs against.
+            assertTrue("a permission should say what it wants to run", permission.display.isNotEmpty())
+            client.decide(session.sessionId, permission.requestId, PermissionDecision.ALLOW)
+
+            // Both decisions landed, so the agent ran to the end of its script and nothing
+            // is blocked any more.
+            withTimeout(TIMEOUT_MS) {
+                client.state.first { state ->
+                    state.session(session.sessionId)?.state == SessionState.IDLE && state.pending.isEmpty()
+                }
+            }
+
             // A prompt from the chat screen shows up in the chat immediately, because the
             // bridge does not reflect prompts back and a chat that swallows what you just
             // said looks broken. That echo is local, though, so it is not evidence the
@@ -100,7 +140,9 @@ class E2eFlowTest {
             }
             assertTrue(said.transcript(session.sessionId).isNotEmpty())
             withTimeout(TIMEOUT_MS) {
-                while (!bridgeReceived("prompt")) delay(200)
+                for (type in listOf("answer", "permission", "prompt")) {
+                    while (!bridgeReceived(type)) delay(200)
+                }
             }
         } finally {
             client.stop()

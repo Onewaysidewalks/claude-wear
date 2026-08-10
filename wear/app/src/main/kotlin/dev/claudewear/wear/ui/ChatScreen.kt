@@ -23,12 +23,12 @@ import dev.claudewear.protocol.PermissionMode
 import dev.claudewear.protocol.SessionState
 
 /**
- * One chat: what has happened, and the two things you can do about it from a wrist.
+ * One chat: what has happened, and what you can do about it from a wrist.
  *
- * A waiting question or permission is rendered as a transcript line rather than a card.
- * That is deliberate for M2 — a permission card that summarises instead of showing the
- * actual command is worse than no card, because approving what you cannot see is the
- * failure this product designs against. The real cards are M3.
+ * Anything the agent is blocked on leads the screen as a chip that opens its card, and the
+ * same block stays in the transcript in its place in the conversation. Dictation is the
+ * first-class way in — the keyboard is still there, but this is a product for answering
+ * without looking, and the mic is the path that does that.
  */
 @Composable
 fun ChatScreen(
@@ -37,9 +37,12 @@ fun ChatScreen(
     onPrompt: (String) -> Unit,
     onInterrupt: () -> Unit,
     onModes: () -> Unit,
+    onOpenRequest: (requestId: String) -> Unit = {},
+    onDictate: (prompt: String, onResult: (String) -> Unit) -> Unit = { _, _ -> },
 ) {
     val session = state.session(sessionId)
     val transcript = state.transcript(sessionId)
+    val blocked = state.pending(sessionId)
     var draft by rememberSaveable(sessionId) { mutableStateOf("") }
     val listState = rememberScalingLazyListState()
 
@@ -68,9 +71,27 @@ fun ChatScreen(
                 }
             }
 
-            items(transcript) { line -> TranscriptRow(line) }
+            // What it is waiting for comes before the history of how it got there.
+            items(blocked) { request ->
+                Chip(
+                    onClick = { onOpenRequest(request.requestId) },
+                    label = { Text(if (request is PendingRequest.Ask) "Answer" else "Allow or deny", maxLines = 1) },
+                    secondaryLabel = { Text(request.summary, maxLines = 2) },
+                    colors = ChipDefaults.primaryChipColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
-            item { Field(value = draft, onValueChange = { draft = it }, hint = "say something") }
+            items(transcript) { line -> TranscriptRow(line, stillWaiting = line.requestId in state.pending) }
+
+            item {
+                CompactChip(
+                    onClick = { onDictate("Say something") { onPrompt(it) } },
+                    label = { Text("Speak") },
+                    colors = ChipDefaults.primaryChipColors(),
+                )
+            }
+            item { Field(value = draft, onValueChange = { draft = it }, hint = "or type") }
             item {
                 Chip(
                     onClick = {
@@ -79,7 +100,7 @@ fun ChatScreen(
                     },
                     label = { Text("Send") },
                     enabled = draft.isNotBlank(),
-                    colors = ChipDefaults.primaryChipColors(),
+                    colors = ChipDefaults.secondaryChipColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -95,7 +116,7 @@ fun ChatScreen(
 }
 
 @Composable
-private fun TranscriptRow(line: TranscriptLine) {
+private fun TranscriptRow(line: TranscriptLine, stillWaiting: Boolean) {
     val colour = when (line.kind) {
         TranscriptLine.Kind.CLAUDE -> MaterialTheme.colors.onSurface
         TranscriptLine.Kind.YOU -> MaterialTheme.colors.onSurfaceVariant
@@ -103,9 +124,12 @@ private fun TranscriptRow(line: TranscriptLine) {
         TranscriptLine.Kind.RESULT -> MaterialTheme.colors.onSurface
         TranscriptLine.Kind.PROBLEM -> MaterialTheme.colors.error
     }
-    val prefix = when (line.kind) {
-        TranscriptLine.Kind.YOU -> "you: "
-        TranscriptLine.Kind.WAITING -> "waiting on you: "
+    // A block that is still blocking says so; one that has been dealt with — here, from the
+    // CLI, or by the agent giving up — is history, and history should not still be shouting.
+    val prefix = when {
+        line.kind == TranscriptLine.Kind.YOU -> "you: "
+        line.kind == TranscriptLine.Kind.WAITING && stillWaiting -> "waiting on you: "
+        line.kind == TranscriptLine.Kind.WAITING -> "asked: "
         else -> ""
     }
     Text(
