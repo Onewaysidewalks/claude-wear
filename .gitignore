@@ -19,3 +19,10 @@ captures/
 
 # E2E scratch
 .e2e/
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/

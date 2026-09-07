@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The gateway speaks plain HTTP on the tailnet; Tailscale is the encryption and the
+  authentication of the two nodes. Android's config cannot express "cleartext only to
+  100.64.0.0/10", so cleartext is permitted here and GatewayConfig.problem() refuses to save
+  any http:// address that is not a Tailscale (CGNAT) or loopback address.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

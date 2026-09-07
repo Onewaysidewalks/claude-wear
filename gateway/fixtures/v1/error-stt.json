@@ -1,0 +1,9 @@
+{
+  "turn_id": "turn_0123456789abcdef",
+  "seq": 2,
+  "at": "2026-09-07T12:00:00.000Z",
+  "type": "error",
+  "code": "stt_failed",
+  "message": "whisper server unreachable",
+  "retryable": true
+}

@@ -1,0 +1,157 @@
+{
+  "$defs": {
+    "AudioInput": {
+      "description": "One utterance, complete. v1 accepts raw little-endian 16-bit PCM only; that is what\nAudioRecord produces and it keeps the watch free of codecs.",
+      "properties": {
+        "channels": {
+          "const": 1,
+          "default": 1,
+          "title": "Channels",
+          "type": "integer"
+        },
+        "data": {
+          "title": "Data",
+          "type": "string"
+        },
+        "format": {
+          "const": "pcm_s16le",
+          "default": "pcm_s16le",
+          "title": "Format",
+          "type": "string"
+        },
+        "sample_rate": {
+          "default": 16000,
+          "enum": [
+            8000,
+            16000,
+            22050,
+            44100,
+            48000
+          ],
+          "title": "Sample Rate",
+          "type": "integer"
+        },
+        "type": {
+          "const": "audio",
+          "default": "audio",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "title": "AudioInput",
+      "type": "object"
+    },
+    "SessionRef": {
+      "description": "Which conversation this turn belongs to. The key is chosen by the client and scoped to the\ndevice that authenticated; two devices using the key \"default\" get two conversations.",
+      "properties": {
+        "key": {
+          "default": "default",
+          "title": "Key",
+          "type": "string"
+        },
+        "reset": {
+          "default": false,
+          "title": "Reset",
+          "type": "boolean"
+        }
+      },
+      "title": "SessionRef",
+      "type": "object"
+    },
+    "TextInput": {
+      "properties": {
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "text",
+          "default": "text",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextInput",
+      "type": "object"
+    },
+    "TurnOptions": {
+      "properties": {
+        "approval_timeout_s": {
+          "anyOf": [
+            {
+              "maximum": 900,
+              "minimum": 5,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Timeout S"
+        },
+        "locale": {
+          "default": "en-US",
+          "title": "Locale",
+          "type": "string"
+        },
+        "speak": {
+          "default": false,
+          "title": "Speak",
+          "type": "boolean"
+        }
+      },
+      "title": "TurnOptions",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "input": {
+      "discriminator": {
+        "mapping": {
+          "audio": "#/$defs/AudioInput",
+          "text": "#/$defs/TextInput"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TextInput"
+        },
+        {
+          "$ref": "#/$defs/AudioInput"
+        }
+      ],
+      "title": "Input"
+    },
+    "options": {
+      "$ref": "#/$defs/TurnOptions",
+      "default": {
+        "approval_timeout_s": null,
+        "locale": "en-US",
+        "speak": false
+      }
+    },
+    "session": {
+      "$ref": "#/$defs/SessionRef",
+      "default": {
+        "key": "default",
+        "reset": false
+      }
+    }
+  },
+  "required": [
+    "input"
+  ],
+  "title": "TurnRequest",
+  "type": "object"
+}

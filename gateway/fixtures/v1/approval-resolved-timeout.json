@@ -1,0 +1,9 @@
+{
+  "turn_id": "turn_0123456789abcdef",
+  "seq": 7,
+  "at": "2026-09-07T12:00:00.000Z",
+  "type": "approval.resolved",
+  "approval_id": "apr_2",
+  "decision": "deny",
+  "by": "timeout"
+}

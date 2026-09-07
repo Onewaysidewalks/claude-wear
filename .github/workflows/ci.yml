@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    name: gateway
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v4
+      # setup-uv creates and activates a venv at the repository root; installing into that one
+      # (rather than a second venv under gateway/) is what puts pydantic on the PATH below.
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          activate-environment: true
+      - run: uv pip install -e '.[dev]'
+      - run: ruff check . && ruff format --check .
+      - run: python scripts/gen_fixtures.py --check
+      - run: pytest -q
+
+  android:
+    name: android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests (shared contract check, phone relay, watch state)
+        run: ./gradlew --no-daemon :shared:test :phone:testDebugUnitTest :watch:testDebugUnitTest
+        working-directory: android
+      - name: Lint
+        run: ./gradlew --no-daemon :spike:lintAssistDebug :spike:lintVoiceDebug :phone:lintDebug :watch:lintDebug
+        working-directory: android
+      - name: APKs
+        run: ./gradlew --no-daemon :spike:assembleDebug :phone:assembleDebug :watch:assembleDebug
+        working-directory: android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apks
+          path: |
+            android/spike/build/outputs/apk/*/debug/*.apk
+            android/phone/build/outputs/apk/debug/*.apk
+            android/watch/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-reports
+          path: android/*/build/reports/
+          if-no-files-found: ignore

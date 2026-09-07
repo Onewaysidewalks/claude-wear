@@ -1,0 +1,9 @@
+{
+  "turn_id": "turn_0123456789abcdef",
+  "seq": 9,
+  "at": "2026-09-07T12:00:00.000Z",
+  "type": "speech.chunk",
+  "format": "audio/mpeg",
+  "data": "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA",
+  "last": true
+}
