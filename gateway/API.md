@@ -7,6 +7,8 @@ interfaces; Hermes is the brain; this document is the seam between them.
 
 * Paths under `/v1` do not change meaning. Fields are only ever added, never removed or renamed.
 * New event types may appear. A client ignores event types and fields it does not know.
+* A field that is absent and a field that is `null` mean the same thing. Optional fields may be
+  sent either way.
 * Breaking changes become `/v2` next to `/v1`; `/v1` keeps working for at least one year after that.
 * Every response carries `X-Gateway-Api: v1` and `X-Gateway-Version: <semver of the implementation>`.
 * `schema/v1/*.schema.json` and `fixtures/v1/*.json` are generated from the reference implementation

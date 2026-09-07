@@ -12,6 +12,7 @@ targetSdk = "34"
 
 androidxCore = "1.13.1"
 activityCompose = "1.9.3"
+fragment = "1.8.5"
 composeBom = "2024.10.01"
 lifecycle = "2.8.7"
 wearCompose = "1.4.0"
@@ -32,6 +33,8 @@ turbine = "1.2.0"
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+# activity-compose pulls an old androidx.fragment transitively; lint (InvalidFragmentVersionForActivityResult) wants 1.3+.
+androidx-fragment = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
