@@ -21,13 +21,16 @@ jobs:
         working-directory: gateway
     steps:
       - uses: actions/checkout@v4
+      # setup-uv creates and activates a venv at the repository root; installing into that one
+      # (rather than a second venv under gateway/) is what puts pydantic on the PATH below.
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
-      - run: uv venv && uv pip install -e '.[dev]'
-      - run: . .venv/bin/activate && ruff check . && ruff format --check .
-      - run: . .venv/bin/activate && python scripts/gen_fixtures.py --check
-      - run: . .venv/bin/activate && pytest -q
+          activate-environment: true
+      - run: uv pip install -e '.[dev]'
+      - run: ruff check . && ruff format --check .
+      - run: python scripts/gen_fixtures.py --check
+      - run: pytest -q
 
   android:
     name: android
