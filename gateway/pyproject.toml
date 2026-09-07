@@ -1,0 +1,39 @@
+[project]
+name = "hermes-gateway"
+version = "1.0.0"
+description = "A small, stable front door for Hermes: text and audio in, events and a response out."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "httpx>=0.27,<1",
+    "pydantic>=2.7,<3",
+    "httpx-sse>=0.4,<1",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+# Local speech-to-text on the Mac, no cloud. Installs a ~100MB wheel plus a model on first use.
+whisper = ["faster-whisper>=1.0"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5", "websockets>=12"]
+
+[project.scripts]
+hermes-gateway = "hermes_gateway.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hermes_gateway"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

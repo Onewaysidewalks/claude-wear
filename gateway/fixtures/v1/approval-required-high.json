@@ -1,0 +1,11 @@
+{
+  "turn_id": "turn_0123456789abcdef",
+  "seq": 6,
+  "at": "2026-09-07T12:00:00.000Z",
+  "type": "approval.required",
+  "approval_id": "apr_2",
+  "action": "ha_call_service",
+  "detail": "lock.unlock front_door",
+  "risk": "high",
+  "expires_at": "2026-09-07T12:02:00Z"
+}

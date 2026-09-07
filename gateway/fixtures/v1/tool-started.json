@@ -1,0 +1,9 @@
+{
+  "turn_id": "turn_0123456789abcdef",
+  "seq": 4,
+  "at": "2026-09-07T12:00:00.000Z",
+  "type": "tool.started",
+  "tool_id": "call_1",
+  "name": "ha_call_service",
+  "summary": "{\"entity_id\":\"light.porch\"}"
+}

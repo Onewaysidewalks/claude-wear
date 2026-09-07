@@ -1,0 +1,551 @@
+{
+  "$defs": {
+    "ApprovalRequired": {
+      "description": "The brain wants to do something it will not do without a human. The turn stays open until\nPOST /v1/turns/{turn_id}/approvals/{approval_id} arrives or the approval expires (then: deny).",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "string"
+        },
+        "risk": {
+          "default": "normal",
+          "enum": [
+            "normal",
+            "high"
+          ],
+          "title": "Risk",
+          "type": "string"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "approval.required",
+          "default": "approval.required",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "approval_id",
+        "action",
+        "expires_at"
+      ],
+      "title": "ApprovalRequired",
+      "type": "object"
+    },
+    "ApprovalResolved": {
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "by": {
+          "default": "client",
+          "enum": [
+            "client",
+            "timeout",
+            "policy"
+          ],
+          "title": "By",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "approval.resolved",
+          "default": "approval.resolved",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "approval_id",
+        "decision"
+      ],
+      "title": "ApprovalResolved",
+      "type": "object"
+    },
+    "ErrorEvent": {
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "default": false,
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "error",
+          "default": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "code",
+        "message"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "InputTranscript": {
+      "description": "What the gateway heard. Emitted once for audio turns, before the brain sees anything.",
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "final": {
+          "default": true,
+          "title": "Final",
+          "type": "boolean"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "input.transcript",
+          "default": "input.transcript",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "text"
+      ],
+      "title": "InputTranscript",
+      "type": "object"
+    },
+    "OutputDelta": {
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "output.delta",
+          "default": "output.delta",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "text"
+      ],
+      "title": "OutputDelta",
+      "type": "object"
+    },
+    "OutputDone": {
+      "description": "The whole answer, in one piece, even when deltas were streamed. Clients that only want the\nfinal text (TTS on the watch) can ignore deltas and wait for this.",
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "output.done",
+          "default": "output.done",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "text"
+      ],
+      "title": "OutputDone",
+      "type": "object"
+    },
+    "SpeechChunk": {
+      "description": "Server-side speech, when the client asked to `speak` and the gateway has a voice. Reserved\nin v1: the reference client uses on-device TTS until this is switched on.",
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "data": {
+          "title": "Data",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "audio/mpeg",
+            "audio/wav",
+            "audio/ogg;codecs=opus"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "last": {
+          "default": false,
+          "title": "Last",
+          "type": "boolean"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "speech.chunk",
+          "default": "speech.chunk",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "format",
+        "data"
+      ],
+      "title": "SpeechChunk",
+      "type": "object"
+    },
+    "ToolCompleted": {
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "default": "",
+          "title": "Summary",
+          "type": "string"
+        },
+        "tool_id": {
+          "title": "Tool Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool.completed",
+          "default": "tool.completed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "tool_id",
+        "name"
+      ],
+      "title": "ToolCompleted",
+      "type": "object"
+    },
+    "ToolStarted": {
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "default": "",
+          "title": "Summary",
+          "type": "string"
+        },
+        "tool_id": {
+          "title": "Tool Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool.started",
+          "default": "tool.started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "tool_id",
+        "name"
+      ],
+      "title": "ToolStarted",
+      "type": "object"
+    },
+    "TurnCompleted": {
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "cancelled",
+            "error"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "turn.completed",
+          "default": "turn.completed",
+          "title": "Type",
+          "type": "string"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage"
+        }
+      },
+      "required": [
+        "turn_id",
+        "status"
+      ],
+      "title": "TurnCompleted",
+      "type": "object"
+    },
+    "TurnStarted": {
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "input_type": {
+          "enum": [
+            "text",
+            "audio"
+          ],
+          "title": "Input Type",
+          "type": "string"
+        },
+        "seq": {
+          "default": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "session_key": {
+          "title": "Session Key",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "turn.started",
+          "default": "turn.started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "session_key",
+        "input_type"
+      ],
+      "title": "TurnStarted",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "discriminator": {
+    "mapping": {
+      "approval.required": "#/$defs/ApprovalRequired",
+      "approval.resolved": "#/$defs/ApprovalResolved",
+      "error": "#/$defs/ErrorEvent",
+      "input.transcript": "#/$defs/InputTranscript",
+      "output.delta": "#/$defs/OutputDelta",
+      "output.done": "#/$defs/OutputDone",
+      "speech.chunk": "#/$defs/SpeechChunk",
+      "tool.completed": "#/$defs/ToolCompleted",
+      "tool.started": "#/$defs/ToolStarted",
+      "turn.completed": "#/$defs/TurnCompleted",
+      "turn.started": "#/$defs/TurnStarted"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/TurnStarted"
+    },
+    {
+      "$ref": "#/$defs/InputTranscript"
+    },
+    {
+      "$ref": "#/$defs/OutputDelta"
+    },
+    {
+      "$ref": "#/$defs/ToolStarted"
+    },
+    {
+      "$ref": "#/$defs/ToolCompleted"
+    },
+    {
+      "$ref": "#/$defs/ApprovalRequired"
+    },
+    {
+      "$ref": "#/$defs/ApprovalResolved"
+    },
+    {
+      "$ref": "#/$defs/OutputDone"
+    },
+    {
+      "$ref": "#/$defs/SpeechChunk"
+    },
+    {
+      "$ref": "#/$defs/TurnCompleted"
+    },
+    {
+      "$ref": "#/$defs/ErrorEvent"
+    }
+  ],
+  "title": "Hermes Gateway v1 event"
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="dev.claudewear.spike.SpikeSessionService"
+    android:recognitionService="dev.claudewear.spike.SpikeRecognitionService"
+    android:settingsActivity="dev.claudewear.spike.MainActivity"
+    android:supportsAssist="true" />

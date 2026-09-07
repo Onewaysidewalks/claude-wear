@@ -1,0 +1,11 @@
+{
+  "turn_id": "turn_0123456789abcdef",
+  "seq": 6,
+  "at": "2026-09-07T12:00:00.000Z",
+  "type": "approval.required",
+  "approval_id": "apr_1",
+  "action": "terminal",
+  "detail": "brew upgrade",
+  "risk": "normal",
+  "expires_at": "2026-09-07T12:02:00Z"
+}

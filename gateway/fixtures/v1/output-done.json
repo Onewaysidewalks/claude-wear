@@ -1,0 +1,7 @@
+{
+  "turn_id": "turn_0123456789abcdef",
+  "seq": 8,
+  "at": "2026-09-07T12:00:00.000Z",
+  "type": "output.done",
+  "text": "Turning off the porch light."
+}

@@ -1,0 +1,15 @@
+{
+  "session": {
+    "key": "default",
+    "reset": false
+  },
+  "input": {
+    "type": "text",
+    "text": "what's on my calendar today?"
+  },
+  "options": {
+    "speak": false,
+    "locale": "en-US",
+    "approval_timeout_s": null
+  }
+}
