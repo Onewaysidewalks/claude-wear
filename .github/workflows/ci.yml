@@ -66,3 +66,20 @@ jobs:
           name: android-reports
           path: android/*/build/reports/
           if-no-files-found: ignore
+
+  loopback:
+    name: loopback (python gateway ↔ kotlin client)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - run: uv venv .venv && uv pip install --python .venv/bin/python -e .
+        working-directory: gateway
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: scripts/loopback.sh

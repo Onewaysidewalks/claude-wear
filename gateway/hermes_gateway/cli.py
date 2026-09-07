@@ -43,6 +43,13 @@ def main(argv: list[str] | None = None) -> int:
     say.add_argument("--session", default="cli")
     say.add_argument("--approve", choices=["allow", "deny"], default=None, help="auto-answer approvals")
 
+    speak = sub.add_parser("speak", help="send a WAV or raw 16 kHz PCM file as an audio turn: checks speech-to-text end to end")
+    speak.add_argument("file")
+    speak.add_argument("--url", default="http://127.0.0.1:8731")
+    speak.add_argument("--token", required=True)
+    speak.add_argument("--session", default="cli")
+    speak.add_argument("--locale", default="en-US")
+
     sub.add_parser("version")
 
     args = p.parse_args(argv)
@@ -74,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(probe(settings, args.prompt))
     if args.cmd == "say":
         return asyncio.run(_say(args.url, args.token, args.session, args.text, args.approve))
+    if args.cmd == "speak":
+        return asyncio.run(_speak(args.url, args.token, args.session, Path(args.file), args.locale))
     if args.cmd == "serve":
         import uvicorn
 
@@ -126,6 +135,48 @@ async def _say(url: str, token: str, session: str, text: str, approve: str | Non
                         headers=headers,
                     )
                     print(f"  -> approval {approve}: {r.status_code}")
+    return 0
+
+
+def read_audio(path: Path) -> tuple[bytes, int]:
+    """WAV (16-bit PCM, mono) or raw little-endian 16-bit PCM assumed to be 16 kHz mono."""
+    data = path.read_bytes()
+    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        import wave
+
+        with wave.open(str(path), "rb") as w:
+            if w.getsampwidth() != 2 or w.getnchannels() != 1:
+                raise SystemExit("the WAV must be 16-bit mono (ffmpeg -i in.m4a -ac 1 -ar 16000 out.wav)")
+            return w.readframes(w.getnframes()), w.getframerate()
+    return data, 16000
+
+
+async def _speak(url: str, token: str, session: str, path: Path, locale: str) -> int:
+    import base64
+
+    import httpx
+    from httpx_sse import aconnect_sse
+
+    pcm, rate = read_audio(path)
+    print(f"{len(pcm) * 1000 // (rate * 2)} ms of audio at {rate} Hz")
+    body = {
+        "session": {"key": session},
+        "input": {"type": "audio", "format": "pcm_s16le", "sample_rate": rate, "channels": 1, "data": base64.b64encode(pcm).decode()},
+        "options": {"locale": locale},
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30, read=None)) as client:
+        async with aconnect_sse(client, "POST", f"{url}/v1/turns", json=body, headers=headers) as source:
+            if source.response.status_code >= 400:
+                print(f"{source.response.status_code}: {(await source.response.aread()).decode()}")
+                return 1
+            async for sse in source.aiter_sse():
+                data = json.loads(sse.data)
+                print(f"{sse.event:18} {json.dumps({k: v for k, v in data.items() if k not in ('type', 'at')})}")
+                if sse.event == "input.transcript":
+                    print(f"\nheard: {data['text']}")
+                if sse.event == "output.done":
+                    print(f"\n{data['text']}\n")
     return 0
 
 
