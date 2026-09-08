@@ -46,6 +46,16 @@ class NoTranscriber:
         raise RuntimeError("speech-to-text is not configured on this gateway (HERMES_GATEWAY_STT)")
 
 
+class FakeTranscriber:
+    """For loopback tests: says how much audio it was given instead of what was said."""
+
+    kind = "fake"
+
+    async def transcribe(self, pcm: bytes, sample_rate: int, locale: str) -> str:
+        millis = len(pcm) * 1000 // (sample_rate * 2)
+        return f"fake transcript of {millis} ms at {sample_rate} Hz in {locale}"
+
+
 class OpenAICompatibleTranscriber:
     """POST multipart WAV to /v1/audio/transcriptions. Works with a local whisper server on the
     Mac (speaches, faster-whisper-server, whisper.cpp server) as well as hosted providers."""
@@ -105,6 +115,8 @@ class LocalWhisperTranscriber:
 def make_transcriber(settings: Settings) -> Transcriber:
     if settings.stt == "none":
         return NoTranscriber()
+    if settings.stt == "fake":
+        return FakeTranscriber()
     if settings.stt == "openai":
         return OpenAICompatibleTranscriber(settings.stt_base_url, settings.stt_api_key, settings.stt_model)
     if settings.stt == "whisper":

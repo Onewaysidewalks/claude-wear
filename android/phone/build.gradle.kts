@@ -42,7 +42,14 @@ android {
 
     packaging { resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}") }
 
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        // scripts/loopback.sh sets these to point LoopbackTest at a real, running gateway.
+        unitTests.all {
+            it.systemProperty("loopback.url", System.getenv("LOOPBACK_GATEWAY_URL") ?: "")
+            it.systemProperty("loopback.token", System.getenv("LOOPBACK_GATEWAY_TOKEN") ?: "")
+        }
+    }
 }
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }

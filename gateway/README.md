@@ -49,6 +49,7 @@ Run it without Hermes to develop against the scripted brain:
 hermes-gateway serve --brain fake --host 127.0.0.1
 hermes-gateway say "echo hello wrist" --token hg1_…
 hermes-gateway say "danger clean up" --token hg1_… --approve deny
+hermes-gateway speak utterance.wav --token hg1_…      # 16-bit mono WAV; proves STT before the watch is involved
 ```
 
 ## As a launchd agent

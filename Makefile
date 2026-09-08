@@ -1,4 +1,4 @@
-.PHONY: all gateway android spike apks fixtures clean
+.PHONY: all gateway android loopback spike apks fixtures clean
 
 GRADLE = cd android && ./gradlew --no-daemon -q
 
@@ -10,6 +10,9 @@ gateway:
 android:
 	$(GRADLE) :shared:test :phone:testDebugUnitTest :watch:testDebugUnitTest
 	$(GRADLE) :spike:lintAssistDebug :spike:lintVoiceDebug :phone:lintDebug :watch:lintDebug
+
+loopback:
+	scripts/loopback.sh
 
 apks:
 	$(GRADLE) :spike:assembleDebug :phone:assembleDebug :watch:assembleDebug

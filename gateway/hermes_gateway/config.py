@@ -10,7 +10,10 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-DEFAULT_HOME = Path(os.environ.get("HERMES_GATEWAY_HOME", Path.home() / ".hermes-gateway"))
+
+def default_home() -> Path:
+    """Read at call time, not import time, so a test or a script can point a fresh Settings elsewhere."""
+    return Path(os.environ.get("HERMES_GATEWAY_HOME", Path.home() / ".hermes-gateway"))
 
 
 @dataclass
@@ -30,7 +33,8 @@ class Settings:
     # Which brain to run. "hermes" for the real thing, "fake" for development without Hermes.
     brain: str = "hermes"
 
-    # Speech-to-text. "none" rejects audio turns; "openai" posts WAV to an OpenAI-compatible
+    # Speech-to-text. "none" rejects audio turns; "fake" reports the audio length (loopback
+    # tests only); "openai" posts WAV to an OpenAI-compatible
     # /v1/audio/transcriptions (a local whisper server on the Mac, or a hosted one); "whisper"
     # runs faster-whisper in-process (pip install 'hermes-gateway[whisper]').
     stt: str = "none"
@@ -47,7 +51,7 @@ class Settings:
     tts_model: str = "tts-1"
     tts_voice: str = "alloy"
 
-    home: Path = field(default_factory=lambda: DEFAULT_HOME)
+    home: Path = field(default_factory=default_home)
     # Extra regexes (case-insensitive) that mark a tool action as high risk. See policy.py.
     high_risk_patterns: list[str] = field(default_factory=list)
     approval_timeout_s: int = 120

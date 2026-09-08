@@ -50,7 +50,8 @@ Each milestone has a proof. Do them in order; do not start the next until the pr
 | M5 | **Assistant role** | Watch app selected as Digital assistant; holding the button starts listening | `android/watch` `AssistEntry` (+ VIS services if M0 says so) |
 | M6 | **Away** | M4 passes in every row of `docs/testing-matrix.md` | relay if the Data Layer fails remotely |
 
-Done means M5 and M6.
+Done means M5 and M6. The bring-up runbook for each step is `docs/bringup.md`; `scripts/loopback.sh`
+proves M2 and M3 with no devices.
 
 ## Assumptions to validate (in order of how much they change the plan)
 
